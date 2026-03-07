@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Helgrind Health</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-theme="dark">
+    <div class="app-shell health-shell">
+        <header class="header topbar">
+            <div class="title-group">
+                <div class="title">Helgrind Health</div>
+                <div class="subtitle">Admin-only listener, certificate, and routing status</div>
+            </div>
+            <div class="header-selection">Private admin listener diagnostics and loaded route summary.</div>
+            <div class="header-right toolbar">
+                <span class="status live">
+                    <span class="status-dot"></span>
+                    <span>HEALTH</span>
+                </span>
+                <a class="button-link header-button" href="/">Back To Dashboard</a>
+                <button id="refresh-health" class="primary header-button" type="button">Refresh</button>
+            </div>
+        </header>
+
+        <section class="status-strip">
+            <div>
+                <span class="label">Environment</span>
+                <strong id="health-environment">Loading</strong>
+            </div>
+            <div>
+                <span class="label">Updated</span>
+                <strong id="health-updated">Loading</strong>
+            </div>
+            <div class="status-message" id="health-message">Fetching current admin health…</div>
+        </section>
+
+        <main class="health-grid">
+            <section class="column health-card">
+                <div class="column-header">
+                    <div>
+                        <p class="eyebrow">Listeners</p>
+                        <h2>Endpoints</h2>
+                    </div>
+                </div>
+                <div class="health-list" id="listener-status-list"></div>
+            </section>
+
+            <section class="column health-card">
+                <div class="column-header">
+                    <div>
+                        <p class="eyebrow">TLS</p>
+                        <h2>Certificate</h2>
+                    </div>
+                </div>
+                <div class="health-list" id="certificate-status-list"></div>
+            </section>
+
+            <section class="column health-card health-card-wide">
+                <div class="column-header">
+                    <div>
+                        <p class="eyebrow">Proxy</p>
+                        <h2>Loaded Routes</h2>
+                    </div>
+                </div>
+                <div class="health-summary" id="proxy-summary"></div>
+                <div class="health-route-list" id="health-route-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/health.js" defer></script>
+</body>
+</html>

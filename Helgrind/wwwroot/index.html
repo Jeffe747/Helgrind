@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Helgrind</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-theme="dark">
+    <div class="app-shell">
+        <header class="header topbar">
+            <div class="title-group">
+                <div class="title">Helgrind</div>
+                <div class="subtitle">Reverse proxy gateway control plane</div>
+            </div>
+            <div id="header-selection" class="header-selection">Public proxy and private admin listeners are configured.</div>
+            <div class="header-right toolbar">
+                <span id="dashboard-status" class="status live">
+                    <span class="status-dot"></span>
+                    <span id="dashboard-status-label">LAN ONLY</span>
+                </span>
+                <a class="button-link header-button" href="/health.html">Health</a>
+                <button id="save-config" class="primary header-button">Save Draft</button>
+                <button id="apply-config" class="header-button">Apply Proxy</button>
+                <button id="export-config" class="header-button">Export</button>
+                <button id="import-config" class="header-button">Import</button>
+                <input id="import-file" type="file" accept="application/json" hidden>
+            </div>
+        </header>
+
+        <section class="status-strip">
+            <div>
+                <span class="label">Public Proxy</span>
+                <strong id="public-https-endpoint">https://localhost:443</strong>
+            </div>
+            <div>
+                <span class="label">Admin Dashboard</span>
+                <strong id="admin-https-endpoint">https://localhost:8444</strong>
+            </div>
+            <div>
+                <span class="label">Environment</span>
+                <strong id="environment-name">Loading</strong>
+            </div>
+            <div>
+                <span class="label">Certificate</span>
+                <strong id="certificate-state">Loading</strong>
+            </div>
+            <div>
+                <span class="label">Last Applied</span>
+                <strong id="last-applied">Never</strong>
+            </div>
+            <div class="status-message" id="status-message">Loading configuration…</div>
+        </section>
+
+        <section class="status-strip network-strip">
+            <div>
+                <span class="label">Admin Access Policy</span>
+                <strong id="admin-network-policy">Loading</strong>
+            </div>
+            <div class="status-message">Expose only the public proxy port outside your network. Keep the admin port off router/NAT forwards.</div>
+        </section>
+
+        <section id="restart-banner" class="restart-banner hidden">
+            <div>
+                <p class="eyebrow">Certificate Restart Required</p>
+                <h2>Helgrind is still serving the previous HTTPS certificate</h2>
+                <p id="restart-hint">Restart the process after replacing the certificate so Kestrel loads the stored PEM and key.</p>
+            </div>
+            <div class="restart-actions">
+                <code>scripts/restart-helgrind.ps1</code>
+                <code>scripts/restart-helgrind.sh</code>
+            </div>
+        </section>
+
+        <main class="layout workspace">
+            <section class="pane column list-column">
+                <div class="column-header">
+                    <div>
+                        <p class="eyebrow">Routes</p>
+                        <h2>Public Entry Points</h2>
+                    </div>
+                    <button id="add-route">Add Route</button>
+                </div>
+                <div id="route-list" class="item-list"></div>
+            </section>
+
+            <section class="pane column list-column">
+                <div class="column-header">
+                    <div>
+                        <p class="eyebrow">Clusters</p>
+                        <h2>Backend Targets</h2>
+                    </div>
+                    <button id="add-cluster">Add Cluster</button>
+                </div>
+                <div id="cluster-list" class="item-list"></div>
+            </section>
+
+            <section class="pane logs-pane column detail-column">
+                <div class="column-header">
+                    <div>
+                        <p class="eyebrow">Editor</p>
+                        <h2 id="editor-title">Select a route or cluster</h2>
+                    </div>
+                    <button id="delete-selected" class="danger">Delete</button>
+                </div>
+
+                <div id="empty-state" class="empty-state empty">
+                    Pick a route or cluster from the lists to edit the quick-setup fields.
+                </div>
+
+                <form id="route-editor" class="editor hidden">
+                    <label>
+                        <span>Route ID</span>
+                        <input id="route-id" type="text" autocomplete="off">
+                    </label>
+                    <label>
+                        <span>Cluster ID</span>
+                        <input id="route-cluster-id" type="text" autocomplete="off">
+                    </label>
+                    <label>
+                        <span>Path</span>
+                        <input id="route-path" type="text" autocomplete="off">
+                    </label>
+                    <label>
+                        <span>Hosts</span>
+                        <textarea id="route-hosts" rows="6" placeholder="api.example.com&#10;www.example.com"></textarea>
+                    </label>
+                    <label>
+                        <span>Order</span>
+                        <input id="route-order" type="number">
+                    </label>
+                </form>
+
+                <form id="cluster-editor" class="editor hidden">
+                    <label>
+                        <span>Cluster ID</span>
+                        <input id="cluster-id" type="text" autocomplete="off">
+                    </label>
+                    <label>
+                        <span>Load Balancing Policy</span>
+                        <input id="cluster-load-balancing" type="text" autocomplete="off" placeholder="Optional">
+                    </label>
+                    <fieldset class="health-check-grid">
+                        <legend>Active Health Check</legend>
+                        <label class="checkbox-row">
+                            <input id="health-enabled" type="checkbox">
+                            <span>Enable health check</span>
+                        </label>
+                        <label>
+                            <span>Interval</span>
+                            <input id="health-interval" type="text" autocomplete="off" placeholder="00:00:10">
+                        </label>
+                        <label>
+                            <span>Timeout</span>
+                            <input id="health-timeout" type="text" autocomplete="off" placeholder="00:00:03">
+                        </label>
+                        <label>
+                            <span>Policy</span>
+                            <input id="health-policy" type="text" autocomplete="off" placeholder="ConsecutiveFailures">
+                        </label>
+                        <label>
+                            <span>Path</span>
+                            <input id="health-path" type="text" autocomplete="off" placeholder="/api-up">
+                        </label>
+                        <label>
+                            <span>Query</span>
+                            <input id="health-query" type="text" autocomplete="off" placeholder="?foo=bar">
+                        </label>
+                        <label>
+                            <span>Failure Threshold</span>
+                            <input id="health-threshold" type="number" min="1" placeholder="1">
+                        </label>
+                    </fieldset>
+                    <section>
+                        <div class="destinations-header">
+                            <h3>Destinations</h3>
+                            <button id="add-destination" type="button">Add Destination</button>
+                        </div>
+                        <div id="destination-list" class="destination-list"></div>
+                    </section>
+                </form>
+
+                <section class="certificate-card">
+                    <div>
+                        <p class="eyebrow">TLS</p>
+                        <h3>Certificate Upload</h3>
+                        <p id="certificate-description">Upload a PEM fullchain and key to replace the active TLS certificate.</p>
+                        <p class="helper-copy">Helgrind stores the PEM and key immediately, but the Kestrel HTTPS listener switches to the new certificate on restart.</p>
+                    </div>
+                    <form id="certificate-form" class="certificate-form">
+                        <label>
+                            <span>Display Name</span>
+                            <input id="certificate-name" type="text" autocomplete="off" placeholder="icicle.dk wildcard">
+                        </label>
+                        <label>
+                            <span>PEM File</span>
+                            <input id="certificate-pem" type="file" accept=".pem,text/plain">
+                        </label>
+                        <label>
+                            <span>Key File</span>
+                            <input id="certificate-key" type="file" accept=".key,.pem,text/plain">
+                        </label>
+                        <button type="submit" class="primary">Upload Certificate</button>
+                    </form>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <template id="destination-row-template">
+        <div class="destination-row">
+            <input class="destination-id" type="text" autocomplete="off" placeholder="destination1">
+            <input class="destination-address" type="text" autocomplete="off" placeholder="https://backend.internal:5001">
+            <button type="button" class="danger small remove-destination">Remove</button>
+        </div>
+    </template>
+
+    <script src="/app.js" defer></script>
+</body>
+</html>

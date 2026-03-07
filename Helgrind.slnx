@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Helgrind.Tests/Helgrind.Tests.csproj" />
+  <Project Path="Helgrind/Helgrind.csproj" />
+</Solution>
