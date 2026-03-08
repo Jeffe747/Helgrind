@@ -62,6 +62,8 @@ public sealed class SettingsDto
     public int PublicHttpsPort { get; set; } = 443;
 
     public int AdminHttpsPort { get; set; } = 8444;
+    public string RuntimeVersionDisplay { get; set; } = string.Empty;
+    public string RuntimeVersionDetails { get; set; } = string.Empty;
 
     public string EnvironmentName { get; set; } = string.Empty;
 

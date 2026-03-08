@@ -424,11 +424,33 @@ legend {
     gap: 2px;
     min-width: 0;
 }
+.title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
 
 .title {
     font-weight: 650;
     font-size: 16px;
     letter-spacing: .01em;
+}
+.header-version {
+    display: inline-flex;
+    align-items: center;
+    max-width: min(260px, 100%);
+    padding: 4px 9px;
+    border: 1px solid color-mix(in srgb, #8fb4ff 34%, var(--border) 66%);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bg-pane) 88%, #081322 12%);
+    color: #d7e5ff;
+    font-size: 11px;
+    letter-spacing: .04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .subtitle {
@@ -1162,6 +1184,9 @@ button:focus-visible,
         order: 3;
         flex-basis: 100%;
         min-width: 0;
+    }
+    .header-version {
+        max-width: 100%;
     }
 
     .toolbar,

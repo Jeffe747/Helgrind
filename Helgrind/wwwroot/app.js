@@ -36,6 +36,7 @@ const elements = {
     clusterEditor: document.getElementById("cluster-editor"),
     destinationList: document.getElementById("destination-list"),
     template: document.getElementById("destination-row-template"),
+    headerVersion: document.getElementById("header-version"),
     statusToast: document.getElementById("status-toast"),
     statusToastTitle: document.getElementById("status-toast-title"),
     statusToastMessage: document.getElementById("status-toast-message"),
@@ -636,6 +637,9 @@ function renderSettings() {
     const settings = state.configuration.settings || {};
     elements.publicHttpsEndpoint.textContent = settings.publicHttpsEndpointDisplay || `https://localhost:${settings.publicHttpsPort ?? 443}`;
     elements.environmentName.textContent = settings.environmentName || "Unknown";
+    elements.headerVersion.textContent = settings.runtimeVersionDisplay || "";
+    elements.headerVersion.title = settings.runtimeVersionDetails || settings.runtimeVersionDisplay || "";
+    elements.headerVersion.classList.toggle("hidden", !settings.runtimeVersionDisplay);
     elements.certificateState.textContent = settings.usingFallbackCertificate
         ? "Temporary certificate"
         : settings.activeCertificate?.displayName || "Uploaded certificate";
