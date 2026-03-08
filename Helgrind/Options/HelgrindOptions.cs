@@ -28,4 +28,8 @@ public sealed class HelgrindOptions
     public string DatabasePath { get; set; } = Path.Combine("App_Data", "helgrind.db");
 
     public string CertificateStoragePath { get; set; } = Path.Combine("App_Data", "certificates");
+
+    public string? SelfUpdateCommand { get; set; }
+
+    public string? SelfUpdateWorkingDirectory { get; set; }
 }

@@ -19,6 +19,8 @@
                     <span class="status-dot"></span>
                     <span id="dashboard-status-label">LAN ONLY</span>
                 </span>
+                <button id="trigger-update" class="header-button hidden" type="button">Update Helgrind</button>
+                <button id="toggle-density" class="header-button" type="button">Ops Mode</button>
                 <a class="button-link header-button" href="/health.html">Health</a>
                 <button id="save-config" class="primary header-button">Save Draft</button>
                 <button id="apply-config" class="header-button">Apply Proxy</button>
@@ -81,6 +83,24 @@
                     </div>
                     <button id="add-route">Add Route</button>
                 </div>
+                <div class="pane-tools">
+                    <button id="toggle-route-filters" class="header-button small filter-toggle" type="button" aria-expanded="false">Route Filters</button>
+                    <span id="route-visible-count" class="pane-summary">0 shown</span>
+                </div>
+                <div id="route-filters" class="filter-panel hidden">
+                    <label class="filter-field">
+                        <span>Search</span>
+                        <input id="route-search" type="search" autocomplete="off" placeholder="route id, host, path, cluster">
+                    </label>
+                    <label class="checkbox-row compact">
+                        <input id="route-filter-linked" type="checkbox">
+                        <span>Focus selected cluster</span>
+                    </label>
+                    <label class="checkbox-row compact">
+                        <input id="route-filter-hosts" type="checkbox">
+                        <span>Only routes with host bindings</span>
+                    </label>
+                </div>
                 <div id="route-list" class="item-list"></div>
             </section>
 
@@ -91,6 +111,24 @@
                         <h2>Backend Targets</h2>
                     </div>
                     <button id="add-cluster">Add Cluster</button>
+                </div>
+                <div class="pane-tools">
+                    <button id="toggle-cluster-filters" class="header-button small filter-toggle" type="button" aria-expanded="false">Cluster Filters</button>
+                    <span id="cluster-visible-count" class="pane-summary">0 shown</span>
+                </div>
+                <div id="cluster-filters" class="filter-panel hidden">
+                    <label class="filter-field">
+                        <span>Search</span>
+                        <input id="cluster-search" type="search" autocomplete="off" placeholder="cluster id, destination, policy">
+                    </label>
+                    <label class="checkbox-row compact">
+                        <input id="cluster-filter-referenced" type="checkbox">
+                        <span>Only clusters used by routes</span>
+                    </label>
+                    <label class="checkbox-row compact">
+                        <input id="cluster-filter-health" type="checkbox">
+                        <span>Only health-checked clusters</span>
+                    </label>
                 </div>
                 <div id="cluster-list" class="item-list"></div>
             </section>

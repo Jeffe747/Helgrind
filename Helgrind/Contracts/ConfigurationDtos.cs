@@ -86,6 +86,12 @@ public sealed class SettingsDto
     public string RestartHint { get; set; } = string.Empty;
 
     public string CertificateStatus { get; set; } = string.Empty;
+
+    public bool SelfUpdateEnabled { get; set; }
+
+    public string SelfUpdateStatus { get; set; } = string.Empty;
+
+    public string SelfUpdateButtonLabel { get; set; } = "Update Helgrind";
 }
 
 public sealed class CertificateMetadataDto
@@ -195,4 +201,13 @@ public sealed class RouteHealthDto
     public string Path { get; set; } = string.Empty;
 
     public List<string> Hosts { get; set; } = [];
+}
+
+public sealed class SelfUpdateResultDto
+{
+    public bool Success { get; set; }
+
+    public bool Accepted { get; set; }
+
+    public string StatusMessage { get; set; } = string.Empty;
 }

@@ -14,7 +14,8 @@ public sealed class ConfigurationService(
     CertificateService certificateService,
     IOptions<HelgrindOptions> options,
     IWebHostEnvironment environment,
-    AdminAccessService adminAccessService)
+    AdminAccessService adminAccessService,
+    SelfUpdateService selfUpdateService)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -98,6 +99,9 @@ public sealed class ConfigurationService(
                 CertificateRestartRequired = certificateRestartRequired,
                 RestartHint = GetRestartHint(certificateRestartRequired),
                 CertificateStatus = certificateService.GetCertificateStatus(activeCertificate),
+                SelfUpdateEnabled = selfUpdateService.IsConfigured,
+                SelfUpdateStatus = selfUpdateService.GetStatusMessage(),
+                SelfUpdateButtonLabel = selfUpdateService.ButtonLabel,
             }
         };
     }

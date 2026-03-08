@@ -1,6 +1,7 @@
 const state = {
     configuration: { routes: [], clusters: [], settings: {} },
     selected: null,
+    ui: loadUiState(),
 };
 
 const elements = {
@@ -9,6 +10,8 @@ const elements = {
     headerSelection: document.getElementById("header-selection"),
     dashboardStatus: document.getElementById("dashboard-status"),
     dashboardStatusLabel: document.getElementById("dashboard-status-label"),
+    triggerUpdate: document.getElementById("trigger-update"),
+    densityToggle: document.getElementById("toggle-density"),
     editorTitle: document.getElementById("editor-title"),
     emptyState: document.getElementById("empty-state"),
     routeEditor: document.getElementById("route-editor"),
@@ -25,6 +28,18 @@ const elements = {
     certificateDescription: document.getElementById("certificate-description"),
     restartBanner: document.getElementById("restart-banner"),
     restartHint: document.getElementById("restart-hint"),
+    routeFiltersPanel: document.getElementById("route-filters"),
+    clusterFiltersPanel: document.getElementById("cluster-filters"),
+    routeFiltersToggle: document.getElementById("toggle-route-filters"),
+    clusterFiltersToggle: document.getElementById("toggle-cluster-filters"),
+    routeSearch: document.getElementById("route-search"),
+    clusterSearch: document.getElementById("cluster-search"),
+    routeFilterLinked: document.getElementById("route-filter-linked"),
+    routeFilterHosts: document.getElementById("route-filter-hosts"),
+    clusterFilterReferenced: document.getElementById("cluster-filter-referenced"),
+    clusterFilterHealth: document.getElementById("cluster-filter-health"),
+    routeVisibleCount: document.getElementById("route-visible-count"),
+    clusterVisibleCount: document.getElementById("cluster-visible-count"),
 };
 
 document.getElementById("add-route").addEventListener("click", () => {
@@ -81,6 +96,8 @@ document.getElementById("apply-config").addEventListener("click", applyConfigura
 document.getElementById("export-config").addEventListener("click", exportConfiguration);
 document.getElementById("import-config").addEventListener("click", () => document.getElementById("import-file").click());
 document.getElementById("import-file").addEventListener("change", importConfiguration);
+elements.triggerUpdate.addEventListener("click", triggerSelfUpdate);
+elements.densityToggle.addEventListener("click", toggleDensityMode);
 document.getElementById("add-destination").addEventListener("click", () => {
     const cluster = getSelectedCluster();
     if (!cluster) {
@@ -98,6 +115,7 @@ document.getElementById("certificate-form").addEventListener("submit", uploadCer
 
 bindRouteEditor();
 bindClusterEditor();
+bindFilters();
 
 loadConfiguration();
 
@@ -188,6 +206,27 @@ async function uploadCertificate(event) {
     await loadConfiguration();
 }
 
+async function triggerSelfUpdate() {
+    if (!state.configuration.settings?.selfUpdateEnabled) {
+        setStatus("Self-update is not configured for this Helgrind instance.");
+        return;
+    }
+
+    if (!window.confirm("Start the Helgrind update command now? The admin UI will disconnect while the process restarts.")) {
+        return;
+    }
+
+    elements.triggerUpdate.disabled = true;
+
+    try {
+        const response = await fetch("/api/admin/update", { method: "POST" });
+        const result = await response.json();
+        setStatus(result.statusMessage);
+    } catch {
+        setStatus("Helgrind started the update command and is restarting.");
+    }
+}
+
 function bindRouteEditor() {
     ["route-id", "route-cluster-id", "route-path", "route-hosts", "route-order"].forEach(id => {
         document.getElementById(id).addEventListener("input", () => {
@@ -245,7 +284,9 @@ function bindClusterEditor() {
 }
 
 function render() {
+    renderDensityMode();
     renderHeaderState();
+    renderFilterState();
     renderListsOnly();
     renderEditor();
     renderSettings();
@@ -282,22 +323,36 @@ function renderHeaderState() {
 }
 
 function renderListsOnly() {
-    renderList(elements.routeList, state.configuration.routes, "route", route => ({
+    const visibleRoutes = getFilteredRoutes();
+    const visibleClusters = getFilteredClusters();
+
+    renderList(elements.routeList, visibleRoutes, "route", route => ({
         title: route.routeId || "Untitled route",
         subtitle: `${route.hosts.join(", ") || "No hosts"}`,
         meta: `Cluster ${route.clusterId || "none"} | Path ${route.path || "{**catch-all}"}`,
         count: route.hosts.length,
     }));
-    renderList(elements.clusterList, state.configuration.clusters, "cluster", cluster => ({
+    renderList(elements.clusterList, visibleClusters, "cluster", cluster => ({
         title: cluster.clusterId || "Untitled cluster",
         subtitle: `${cluster.destinations.length} destination(s)`,
         meta: cluster.healthCheck.enabled ? `Health ${cluster.healthCheck.path || "/"}` : "Health disabled",
         count: cluster.destinations.length,
     }));
+
+    elements.routeVisibleCount.textContent = `${visibleRoutes.length} / ${state.configuration.routes.length} shown`;
+    elements.clusterVisibleCount.textContent = `${visibleClusters.length} / ${state.configuration.clusters.length} shown`;
 }
 
 function renderList(container, items, type, formatter) {
     container.innerHTML = "";
+    if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "list-empty";
+        empty.textContent = "No items match the active filters.";
+        container.appendChild(empty);
+        return;
+    }
+
     items.forEach(item => {
         const id = type === "route" ? item.routeId : item.clusterId;
         const entry = formatter(item);
@@ -397,6 +452,32 @@ function renderSettings() {
     elements.certificateDescription.textContent = settings.certificateStatus || "Upload a PEM fullchain and key to replace the active TLS certificate.";
     elements.restartBanner.classList.toggle("hidden", !settings.certificateRestartRequired);
     elements.restartHint.textContent = settings.restartHint || "Restart the process after replacing the certificate so Kestrel loads the stored PEM and key.";
+    elements.triggerUpdate.classList.toggle("hidden", !settings.selfUpdateEnabled);
+    elements.triggerUpdate.disabled = !settings.selfUpdateEnabled;
+    elements.triggerUpdate.textContent = settings.selfUpdateButtonLabel || "Update Helgrind";
+    elements.triggerUpdate.title = settings.selfUpdateStatus || "";
+}
+
+function renderFilterState() {
+    elements.routeFiltersPanel.classList.toggle("hidden", !state.ui.routeFilters.expanded);
+    elements.clusterFiltersPanel.classList.toggle("hidden", !state.ui.clusterFilters.expanded);
+    elements.routeFiltersToggle.setAttribute("aria-expanded", String(state.ui.routeFilters.expanded));
+    elements.clusterFiltersToggle.setAttribute("aria-expanded", String(state.ui.clusterFilters.expanded));
+    elements.routeFiltersToggle.classList.toggle("active", state.ui.routeFilters.expanded);
+    elements.clusterFiltersToggle.classList.toggle("active", state.ui.clusterFilters.expanded);
+
+    elements.routeSearch.value = state.ui.routeFilters.search;
+    elements.clusterSearch.value = state.ui.clusterFilters.search;
+    elements.routeFilterLinked.checked = state.ui.routeFilters.selectedClusterOnly;
+    elements.routeFilterHosts.checked = state.ui.routeFilters.hostsOnly;
+    elements.clusterFilterReferenced.checked = state.ui.clusterFilters.referencedOnly;
+    elements.clusterFilterHealth.checked = state.ui.clusterFilters.healthEnabledOnly;
+}
+
+function renderDensityMode() {
+    document.body.dataset.density = state.ui.density;
+    elements.densityToggle.classList.toggle("active", state.ui.density === "dense");
+    elements.densityToggle.textContent = state.ui.density === "dense" ? "Ops Mode: Dense" : "Ops Mode";
 }
 
 function selectItem(type, id) {
@@ -421,6 +502,163 @@ function getSelectedCluster() {
 
 function setStatus(message) {
     elements.statusMessage.textContent = message;
+}
+
+function bindFilters() {
+    elements.routeFiltersToggle.addEventListener("click", () => {
+        state.ui.routeFilters.expanded = !state.ui.routeFilters.expanded;
+        persistUiState();
+        renderFilterState();
+    });
+
+    elements.clusterFiltersToggle.addEventListener("click", () => {
+        state.ui.clusterFilters.expanded = !state.ui.clusterFilters.expanded;
+        persistUiState();
+        renderFilterState();
+    });
+
+    elements.routeSearch.addEventListener("input", event => {
+        state.ui.routeFilters.search = event.target.value;
+        persistUiState();
+        renderListsOnly();
+    });
+
+    elements.clusterSearch.addEventListener("input", event => {
+        state.ui.clusterFilters.search = event.target.value;
+        persistUiState();
+        renderListsOnly();
+    });
+
+    elements.routeFilterLinked.addEventListener("change", event => {
+        state.ui.routeFilters.selectedClusterOnly = event.target.checked;
+        persistUiState();
+        renderListsOnly();
+    });
+
+    elements.routeFilterHosts.addEventListener("change", event => {
+        state.ui.routeFilters.hostsOnly = event.target.checked;
+        persistUiState();
+        renderListsOnly();
+    });
+
+    elements.clusterFilterReferenced.addEventListener("change", event => {
+        state.ui.clusterFilters.referencedOnly = event.target.checked;
+        persistUiState();
+        renderListsOnly();
+    });
+
+    elements.clusterFilterHealth.addEventListener("change", event => {
+        state.ui.clusterFilters.healthEnabledOnly = event.target.checked;
+        persistUiState();
+        renderListsOnly();
+    });
+}
+
+function toggleDensityMode() {
+    state.ui.density = state.ui.density === "dense" ? "comfortable" : "dense";
+    persistUiState();
+    renderDensityMode();
+}
+
+function getFilteredRoutes() {
+    const filters = state.ui.routeFilters;
+    const selectedClusterId = getFocusedClusterId();
+    const searchNeedle = filters.search.trim().toLowerCase();
+
+    return state.configuration.routes.filter(route => {
+        if (filters.selectedClusterOnly && selectedClusterId && route.clusterId !== selectedClusterId) {
+            return false;
+        }
+
+        if (filters.hostsOnly && !route.hosts.length) {
+            return false;
+        }
+
+        if (!searchNeedle) {
+            return true;
+        }
+
+        const haystack = [route.routeId, route.clusterId, route.path, ...(route.hosts || [])]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+        return haystack.includes(searchNeedle);
+    });
+}
+
+function getFilteredClusters() {
+    const filters = state.ui.clusterFilters;
+    const searchNeedle = filters.search.trim().toLowerCase();
+    const referencedClusterIds = new Set(state.configuration.routes.map(route => route.clusterId).filter(Boolean));
+
+    return state.configuration.clusters.filter(cluster => {
+        if (filters.referencedOnly && !referencedClusterIds.has(cluster.clusterId)) {
+            return false;
+        }
+
+        if (filters.healthEnabledOnly && !cluster.healthCheck.enabled) {
+            return false;
+        }
+
+        if (!searchNeedle) {
+            return true;
+        }
+
+        const haystack = [
+            cluster.clusterId,
+            cluster.loadBalancingPolicy,
+            cluster.healthCheck.path,
+            cluster.healthCheck.policy,
+            ...cluster.destinations.map(destination => `${destination.destinationId} ${destination.address}`),
+        ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+        return haystack.includes(searchNeedle);
+    });
+}
+
+function getFocusedClusterId() {
+    if (state.selected?.type === "cluster") {
+        return state.selected.id;
+    }
+
+    if (state.selected?.type === "route") {
+        return getSelectedRoute()?.clusterId ?? null;
+    }
+
+    return null;
+}
+
+function persistUiState() {
+    localStorage.setItem("helgrind-ui", JSON.stringify(state.ui));
+}
+
+function loadUiState() {
+    try {
+        const stored = JSON.parse(localStorage.getItem("helgrind-ui") || "null");
+        return {
+            density: stored?.density === "dense" ? "dense" : "comfortable",
+            routeFilters: {
+                expanded: !!stored?.routeFilters?.expanded,
+                search: stored?.routeFilters?.search || "",
+                selectedClusterOnly: !!stored?.routeFilters?.selectedClusterOnly,
+                hostsOnly: !!stored?.routeFilters?.hostsOnly,
+            },
+            clusterFilters: {
+                expanded: !!stored?.clusterFilters?.expanded,
+                search: stored?.clusterFilters?.search || "",
+                referencedOnly: !!stored?.clusterFilters?.referencedOnly,
+                healthEnabledOnly: !!stored?.clusterFilters?.healthEnabledOnly,
+            },
+        };
+    } catch {
+        return {
+            density: "comfortable",
+            routeFilters: { expanded: false, search: "", selectedClusterOnly: false, hostsOnly: false },
+            clusterFilters: { expanded: false, search: "", referencedOnly: false, healthEnabledOnly: false },
+        };
+    }
 }
 
 function escapeHtml(value) {

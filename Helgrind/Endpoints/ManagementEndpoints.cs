@@ -50,6 +50,9 @@ public static class ManagementEndpoints
             return Results.Ok(await certificateService.UploadAndActivateAsync(pemFile, keyFile, displayName, cancellationToken));
         }).DisableAntiforgery();
 
+        group.MapPost("/update", async (SelfUpdateService selfUpdateService, CancellationToken cancellationToken) =>
+            Results.Ok(await selfUpdateService.TriggerUpdateAsync(cancellationToken)));
+
         return endpoints;
     }
 }

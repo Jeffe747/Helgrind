@@ -1,145 +1,119 @@
 # Helgrind
 
-Helgrind is a reusable .NET 10 reverse proxy gateway built on YARP. It combines a static management UI, SQLite-backed configuration, import and export support, and PEM certificate upload for Kestrel HTTPS hosting.
+Helgrind is a .NET 10 reverse proxy gateway built on YARP. It gives you a small admin UI for managing routes and clusters, stores configuration in SQLite, and serves traffic through a separate public HTTPS listener.
 
-## Current MVP
+## Linux Install And Update
 
-- .NET 10 ASP.NET Core app named `Helgrind`
-- YARP runtime configuration driven from SQLite instead of hardcoded JSON
-- Static management UI in `wwwroot` using `index.html`, `app.js`, and `styles.css`
-- Three-column layout: routes, clusters, and editable detail view
-- Split HTTPS listeners: one public proxy listener and one private admin listener
-- LAN-only protection for the admin listener based on configurable CIDR ranges
-- Quick-setup fields for host routing, path matching, destinations, and active health checks
-- Import and export for the quick-setup model
-- PEM and key upload for the certificate used by Kestrel
-- Visible restart warning when a stored certificate has not been picked up by Kestrel yet
-- Restart helper scripts for Windows and Linux hosts
-- Unit tests for configuration mapping, normalization/import logic, and certificate runtime behavior
+Systemd files are included in [deploy/systemd/helgrind.service](/e:/Development/Helgrind/deploy/systemd/helgrind.service) and [deploy/systemd/helgrind.env.example](/e:/Development/Helgrind/deploy/systemd/helgrind.env.example).
 
-## Project Layout
+The intended Ubuntu flow is:
 
-- `Helgrind/` main web application
-- `Helgrind/Data/` SQLite entities and DbContext
-- `Helgrind/Services/` runtime config, certificate, and configuration services
-- `Helgrind/Endpoints/` management API endpoints for the UI
-- `Helgrind/wwwroot/` static frontend
-- `Helgrind.Tests/` logic unit tests
+- install with `deploy/linux/install.sh`
+- keep the source checkout in `/opt/helgrind-src`
+- publish the runnable app into `/opt/helgrind`
+- keep SQLite and certificates in `/var/lib/helgrind`
+- let the admin update button call `deploy/linux/update.sh`
 
-## How It Works
+Install script:
 
-Helgrind stores a quick-setup configuration model in SQLite. That model is transformed into YARP route and cluster definitions by `ProxyConfigFactory`, then pushed into a custom in-memory `IProxyConfigProvider` so proxy changes can be applied without restarting the app.
+- installs Git, rsync, and .NET 10 SDK
+- clones the repo
+- sets up the `helgrind` user, systemd service, and env file
+- adds a narrow sudo rule so the service user can run the update script only
+- configures the production self-update command
+- publishes and starts the service
 
-Helgrind now runs two HTTPS listeners:
+Update script:
 
-- a public listener for reverse proxy traffic
-- an admin listener for the dashboard and management API
+- pulls the latest code
+- republishes the app
+- replaces files in `/opt/helgrind`
+- restarts `helgrind.service`
 
-The admin listener is restricted to the configured LAN CIDR ranges. Requests from outside those networks are rejected before the UI or API is served.
+Example install command:
 
-The management UI talks to the backend using `/api/admin/*` endpoints:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Jeffe747/Helgrind/main/deploy/linux/install.sh | sudo bash
+```
 
-- `GET /api/admin/configuration` returns the current editable model
-- `PUT /api/admin/configuration` saves the draft to SQLite
-- `POST /api/admin/apply` validates and applies the proxy config live
-- `GET /api/admin/export` exports the quick-setup model as JSON
-- `POST /api/admin/import` imports a previously exported JSON package
-- `POST /api/admin/certificate` uploads and activates a PEM and key
+Over SSH:
 
-## Certificate Behavior
+```bash
+ssh ubuntu@your-server "curl -fsSL https://raw.githubusercontent.com/Jeffe747/Helgrind/main/deploy/linux/install.sh | sudo bash"
+```
 
-Helgrind starts with a generated temporary self-signed certificate if no PEM and key have been uploaded yet. That allows the app to boot and serve the UI immediately.
+Optional overrides:
 
-When you upload a PEM and key through the UI:
+- `HELGRIND_REPO_REF` if you want a branch or tag other than `main`
+- `HELGRIND_REPO_URL` if you fork the repo later
 
-- the files are stored under `Helgrind/App_Data/certificates/`
-- certificate metadata is saved in SQLite
-- the uploaded certificate is staged for Kestrel and becomes active after Helgrind is restarted
+## What It Does
 
-The dashboard shows when the currently served certificate does not match the stored certificate and exposes restart helper script names for the common host workflows.
+- Static admin UI in `wwwroot`
+- SQLite-backed route and cluster configuration
+- Live proxy apply without restarting the app
+- Import and export of the editable config model
+- PEM and key upload for the app's HTTPS certificate
+- Split listeners: public proxy and private admin dashboard
+- LAN-only access controls for the admin listener
+- Admin-triggered self-update from the LAN-only dashboard
+- Admin health page at `/health.html`
 
-Exports include certificate metadata only. The raw PEM and key are intentionally excluded, so restoring a full deployment still requires uploading the certificate material separately.
+## Default Ports
 
-## Port 443 and Hosting Notes
+- Development: public `8443`, admin `9443`
+- Production: public `443`, admin `8444`
 
-Production defaults to these ports:
+Only the public listener should be exposed externally. Keep the admin port private to your LAN, VPN, or other trusted network.
 
-- public proxy: `443`
-- admin dashboard: `8444`
-
-Development defaults to these ports through `appsettings.Development.json`:
-
-- public proxy: `8443`
-- admin dashboard: `9443`
-
-Using port `443` may require elevated permissions or environment-specific configuration:
-
-- Windows may require running with sufficient privileges depending on the environment and binding rules.
-- Linux commonly requires `CAP_NET_BIND_SERVICE`, a reverse proxy in front, or elevated privileges.
-
-## Run Locally
+## Quick Start
 
 ```powershell
 dotnet build Helgrind.slnx
 dotnet run --project Helgrind/Helgrind.csproj
 ```
 
-Open the configured HTTPS endpoint in your browser. In development, that is typically `https://localhost:8443`.
+Then open:
 
-For the dashboard in development, use `https://localhost:9443`.
+- Dashboard: `https://localhost:9443/`
+- Health: `https://localhost:9443/health.html`
+- Public proxy listener: `https://localhost:8443/`
 
-For the admin health page in development, use `https://localhost:9443/health.html`.
+## Basic Setup Flow
 
-The dashboard also shows the active environment name and the effective HTTPS endpoint so you can tell at a glance whether you are looking at development or production settings.
+1. Add clusters and destinations.
+2. Add routes that point to those clusters.
+3. Save the draft.
+4. Apply the proxy configuration.
+5. Upload a PEM and key for the app certificate.
+6. Restart Helgrind if the dashboard says the certificate is staged but not active yet.
 
-The admin listener also exposes a small health page that shows:
+## Certificate Behavior
 
-- public and admin listener status
-- served certificate state and restart requirement
-- loaded route, cluster, and destination counts
-- the currently loaded routes
+If no certificate has been uploaded yet, Helgrind starts with a temporary self-signed certificate so the UI is still reachable.
 
-## Public And Admin Split
+When you upload a PEM and key:
 
-The intended deployment shape is:
+- the files are stored on disk
+- certificate metadata is saved in SQLite
+- the certificate becomes active on the next app restart
 
-- expose only the public proxy port externally
-- keep the admin dashboard port off router forwards and public load balancers
-- allow the admin listener only from your LAN, VPN, or other explicitly allowed private ranges
+Exports include certificate metadata only, not the raw PEM or key.
 
-The allowed admin networks are configured in `Helgrind:AllowedAdminNetworks` in appsettings.
+## Configuration Notes
 
-Default allowed admin ranges are:
-
-- `127.0.0.0/8`
-- `::1/128`
-- `10.0.0.0/8`
-- `172.16.0.0/12`
-- `192.168.0.0/16`
-- `fc00::/7`
-- `fe80::/10`
-
-If you use Tailscale, WireGuard, or another overlay network for admin access, add the relevant CIDR ranges here.
-
-Because the fallback certificate is self-signed, your browser will warn until you upload a trusted certificate.
-
-## Run Tests
-
-```powershell
-dotnet test Helgrind.Tests/Helgrind.Tests.csproj
-```
+- Admin network restrictions are controlled by `Helgrind:AllowedAdminNetworks`.
+- Proxy config is stored in SQLite and translated into YARP runtime config in memory.
+- The dashboard and API are only served from the admin listener.
+- The update button is hidden in Development.
+- In Production, the update button is only enabled when `Helgrind:SelfUpdateCommand` is configured. The included Ubuntu deployment uses `sudo /bin/bash /opt/helgrind-src/deploy/linux/update.sh`.
 
 ## Restart Helpers
 
-Windows PowerShell:
+Windows:
 
 ```powershell
 ./scripts/restart-helgrind.ps1
-```
-
-Windows PowerShell without rebuilding:
-
-```powershell
 ./scripts/restart-helgrind.ps1 -NoBuild
 ```
 
@@ -147,95 +121,26 @@ Linux or WSL:
 
 ```bash
 ./scripts/restart-helgrind.sh
-```
-
-Linux or WSL without rebuilding:
-
-```bash
 ./scripts/restart-helgrind.sh ./Helgrind/Helgrind.csproj no-build
 ```
 
-## Linux systemd Deployment
+## Tests
 
-Helgrind includes `systemd` deployment files in [deploy/systemd/helgrind.service](/e:/Development/Helgrind/deploy/systemd/helgrind.service) and [deploy/systemd/helgrind.env.example](/e:/Development/Helgrind/deploy/systemd/helgrind.env.example).
-
-The intended Linux shape is:
-
-- publish the app to `/opt/helgrind`
-- store writable state under `/var/lib/helgrind`
-- expose only the public proxy port externally
-- keep the admin port private to LAN or VPN networks
-
-Example publish command:
-
-```bash
-dotnet publish ./Helgrind/Helgrind.csproj -c Release -o ./publish/linux
+```powershell
+dotnet test Helgrind.Tests/Helgrind.Tests.csproj
 ```
 
-Example installation flow:
+## Project Layout
 
-```bash
-sudo useradd --system --home /opt/helgrind --shell /usr/sbin/nologin helgrind
-sudo mkdir -p /opt/helgrind /etc/helgrind /var/lib/helgrind
-sudo cp -R ./publish/linux/* /opt/helgrind/
-sudo cp ./deploy/systemd/helgrind.service /etc/systemd/system/helgrind.service
-sudo cp ./deploy/systemd/helgrind.env.example /etc/helgrind/helgrind.env
-sudo chown -R root:root /opt/helgrind
-sudo chown -R helgrind:helgrind /var/lib/helgrind /etc/helgrind
-sudo chmod 640 /etc/helgrind/helgrind.env
-sudo systemctl daemon-reload
-sudo systemctl enable --now helgrind.service
-```
+- `Helgrind/` main web app
+- `Helgrind/Data/` SQLite entities and DbContext
+- `Helgrind/Services/` config, certificate, and runtime services
+- `Helgrind/Endpoints/` admin API endpoints
+- `Helgrind/wwwroot/` static frontend
+- `Helgrind.Tests/` unit tests
 
-Useful service commands:
+## Current Limits
 
-```bash
-sudo systemctl status helgrind
-sudo systemctl restart helgrind
-sudo journalctl -u helgrind -f
-```
-
-The shipped unit preserves the split listener model:
-
-- public proxy listener on `443`
-- private admin listener on `8444`
-- `CAP_NET_BIND_SERVICE` so Helgrind can bind `443` without running as root
-- writable state isolated to `/var/lib/helgrind`
-
-If you need different ports or extra private networks for the admin listener, change `/etc/helgrind/helgrind.env` and restart the service.
-
-Recommended firewall posture on Linux:
-
-- allow `443/tcp` from anywhere if Helgrind is your public edge
-- allow `8444/tcp` only from your LAN, VPN, or overlay network ranges
-- do not publish or forward the admin port on your router
-
-## Quick Setup Flow
-
-1. Start Helgrind.
-2. Open the UI.
-3. Add one or more clusters and destinations.
-4. Add routes that reference those clusters.
-5. Save the draft.
-6. Apply the proxy configuration.
-7. Upload the PEM and key used for the public HTTPS endpoint.
-8. Export the configuration once the setup is stable.
-
-## What This MVP Does Not Cover Yet
-
-- Advanced YARP transforms and header manipulation
-- Authentication or authorization for the admin UI
-- ACME or Let's Encrypt automation
-- Full parity with every YARP configuration setting
-- Browser end-to-end tests
-
-## Notes For Your Example Topology
-
-The current quick-setup model is intentionally generic. It does not pre-seed your specific domains or destination placeholders, but it supports the same shape:
-
-- one route per host
-- one cluster per backend target group
-- one or more destinations per cluster
-- optional active health checks with interval, timeout, policy, path, query, and threshold
-
-That keeps Helgrind usable outside your current homelab setup while still covering the structure you described.
+- No built-in admin authentication beyond network restriction
+- No ACME or Let's Encrypt automation
+- Not a full surface-area editor for every YARP feature
