@@ -53,6 +53,21 @@ public static class ManagementEndpoints
         group.MapPost("/update", async (SelfUpdateService selfUpdateService, CancellationToken cancellationToken) =>
             Results.Ok(await selfUpdateService.TriggerUpdateAsync(cancellationToken)));
 
+        group.MapGet("/telemetry/summary", async (TelemetryQueryService telemetryQueryService, int? hours, CancellationToken cancellationToken) =>
+            Results.Ok(await telemetryQueryService.GetSummaryAsync(hours ?? 24, cancellationToken)));
+
+        group.MapGet("/telemetry/events", async (TelemetryQueryService telemetryQueryService, int? hours, int? page, int? pageSize, string? riskLevel, string? category, CancellationToken cancellationToken) =>
+            Results.Ok(await telemetryQueryService.GetEventsAsync(hours ?? 24, page ?? 1, pageSize ?? 25, riskLevel, category, cancellationToken)));
+
+        group.MapGet("/telemetry/top-sources", async (TelemetryQueryService telemetryQueryService, int? hours, int? limit, CancellationToken cancellationToken) =>
+            Results.Ok(await telemetryQueryService.GetTopSourcesAsync(hours ?? 24, limit ?? 10, cancellationToken)));
+
+        group.MapGet("/telemetry/top-targets", async (TelemetryQueryService telemetryQueryService, int? hours, int? limit, CancellationToken cancellationToken) =>
+            Results.Ok(await telemetryQueryService.GetTopTargetsAsync(hours ?? 24, limit ?? 10, cancellationToken)));
+
+        group.MapGet("/telemetry/trends", async (TelemetryQueryService telemetryQueryService, int? hours, int? bucketMinutes, CancellationToken cancellationToken) =>
+            Results.Ok(await telemetryQueryService.GetTrendAsync(hours ?? 24, bucketMinutes ?? 60, cancellationToken)));
+
         return endpoints;
     }
 }

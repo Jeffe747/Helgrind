@@ -251,9 +251,134 @@
         <section id="empty-view" class="view-panel hidden">
             <div class="telemetry-shell pane detail-pane-shell">
                 <div class="pane-head detail-head">
-                    <h2>Telemetry</h2>
+                    <div class="telemetry-heading">
+                        <h2>Telemetry</h2>
+                        <p id="telemetry-subtitle" class="telemetry-subtitle">Suspicious public traffic only.</p>
+                    </div>
+                    <div class="telemetry-actions">
+                        <label class="telemetry-select-field">
+                            <span>Window</span>
+                            <select id="telemetry-hours">
+                                <option value="1">Last 1 hour</option>
+                                <option value="6">Last 6 hours</option>
+                                <option value="24" selected>Last 24 hours</option>
+                                <option value="72">Last 72 hours</option>
+                            </select>
+                        </label>
+                        <button id="telemetry-smoke" class="header-button" type="button">Run Smoke Test</button>
+                        <button id="telemetry-refresh" class="header-button" type="button">Refresh</button>
+                    </div>
                 </div>
-                <div class="telemetry-empty"></div>
+                <div class="telemetry-body">
+                    <section class="telemetry-summary-grid" aria-label="Telemetry summary">
+                        <article class="telemetry-card">
+                            <span class="label">Suspicious Events</span>
+                            <strong id="telemetry-event-count">0</strong>
+                            <span class="telemetry-card-copy">Events in the selected window.</span>
+                        </article>
+                        <article class="telemetry-card high-risk">
+                            <span class="label">High Risk</span>
+                            <strong id="telemetry-high-risk-count">0</strong>
+                            <span class="telemetry-card-copy">High-risk detections eligible for alerting.</span>
+                        </article>
+                        <article class="telemetry-card">
+                            <span class="label">Unique Sources</span>
+                            <strong id="telemetry-source-count">0</strong>
+                            <span class="telemetry-card-copy">Distinct remote addresses seen.</span>
+                        </article>
+                        <article class="telemetry-card">
+                            <span class="label">Latest Event</span>
+                            <strong id="telemetry-latest-event">Never</strong>
+                            <span id="telemetry-alert-state" class="telemetry-card-copy">Webhook alerts inactive.</span>
+                        </article>
+                    </section>
+
+                    <section class="telemetry-layout-grid">
+                        <article class="telemetry-panel telemetry-panel-main">
+                            <div class="telemetry-panel-head">
+                                <div>
+                                    <h3>Recent Events</h3>
+                                    <p id="telemetry-last-updated" class="telemetry-copy">Waiting for data.</p>
+                                </div>
+                                <div class="telemetry-panel-controls">
+                                    <label class="telemetry-select-field compact">
+                                        <span>Risk</span>
+                                        <select id="telemetry-risk-filter">
+                                            <option value="All" selected>All</option>
+                                            <option value="High">High</option>
+                                            <option value="Medium">Medium</option>
+                                            <option value="Low">Low</option>
+                                        </select>
+                                    </label>
+                                    <label class="telemetry-select-field compact">
+                                        <span>Signal</span>
+                                        <select id="telemetry-category-filter">
+                                            <option value="All" selected>All</option>
+                                            <option value="ExploitPath">ExploitPath</option>
+                                            <option value="UnsupportedMethod">UnsupportedMethod</option>
+                                            <option value="RouteMiss">RouteMiss</option>
+                                            <option value="HostMismatch">HostMismatch</option>
+                                            <option value="ProtocolAnomaly">ProtocolAnomaly</option>
+                                            <option value="Burst">Burst</option>
+                                            <option value="SmokeTest">SmokeTest</option>
+                                        </select>
+                                    </label>
+                                    <div class="telemetry-pager">
+                                    <button id="telemetry-prev-page" class="header-button small" type="button">Prev</button>
+                                    <span id="telemetry-page-label" class="telemetry-copy">Page 1</span>
+                                    <button id="telemetry-next-page" class="header-button small" type="button">Next</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="telemetry-table-shell">
+                                <table class="telemetry-table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Time</th>
+                                            <th scope="col">Risk</th>
+                                            <th scope="col">Source</th>
+                                            <th scope="col">Target</th>
+                                            <th scope="col">Signal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="telemetry-events-body"></tbody>
+                                </table>
+                            </div>
+                        </article>
+
+                        <aside class="telemetry-side-grid">
+                            <article class="telemetry-panel">
+                                <div class="telemetry-panel-head">
+                                    <div>
+                                        <h3>Top Sources</h3>
+                                        <p class="telemetry-copy">Most active probing addresses.</p>
+                                    </div>
+                                </div>
+                                <div id="telemetry-top-sources" class="telemetry-list"></div>
+                            </article>
+
+                            <article class="telemetry-panel">
+                                <div class="telemetry-panel-head">
+                                    <div>
+                                        <h3>Top Targets</h3>
+                                        <p class="telemetry-copy">Hosts and paths most frequently hit.</p>
+                                    </div>
+                                </div>
+                                <div id="telemetry-top-targets" class="telemetry-list"></div>
+                            </article>
+
+                            <article class="telemetry-panel">
+                                <div class="telemetry-panel-head">
+                                    <div>
+                                        <h3>Request Graph</h3>
+                                        <p id="telemetry-graph-copy" class="telemetry-copy">Suspicious requests per 5 minutes.</p>
+                                    </div>
+                                </div>
+                                <div id="telemetry-trend" class="telemetry-graph-shell"></div>
+                            </article>
+                        </aside>
+                    </section>
+                </div>
             </div>
         </section>
     </div>

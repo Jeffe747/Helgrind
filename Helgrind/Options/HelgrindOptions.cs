@@ -32,4 +32,22 @@ public sealed class HelgrindOptions
     public string? SelfUpdateCommand { get; set; }
 
     public string? SelfUpdateWorkingDirectory { get; set; }
+
+    public bool TelemetryEnabled { get; set; } = true;
+
+    public int TelemetryRetentionDays { get; set; } = 30;
+
+    public int TelemetryBurstWindowSeconds { get; set; } = 30;
+
+    public int TelemetryBurstThreshold { get; set; } = 20;
+
+    public int TelemetryMaxEventPageSize { get; set; } = 100;
+
+    public string TelemetrySmokePath { get; set; } = "/__helgrind/telemetry/smoke";
+
+    public string? TelemetryAlertWebhookUrl { get; set; }
+
+    public int TelemetryAlertMinimumRiskScore { get; set; } = 3;
+
+    public int TelemetryAlertCooldownMinutes { get; set; } = 10;
 }

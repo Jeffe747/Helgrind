@@ -3,10 +3,21 @@ const state = {
     selected: null,
     ui: loadUiState(),
     activeView: "dashboard",
+    telemetry: {
+        summary: null,
+        events: { page: 1, pageSize: 25, totalCount: 0, events: [] },
+        topSources: [],
+        topTargets: [],
+        trends: [],
+        isLoading: false,
+        lastLoadedUtc: null,
+        error: "",
+    },
 };
 
 let statusToastTimer = null;
 let statusToastPinned = false;
+let telemetryRefreshTimer = null;
 
 const elements = {
     routeList: document.getElementById("route-list"),
@@ -46,6 +57,26 @@ const elements = {
     clusterFilterHealth: document.getElementById("cluster-filter-health"),
     routeVisibleCount: document.getElementById("route-visible-count"),
     clusterVisibleCount: document.getElementById("cluster-visible-count"),
+    telemetryHours: document.getElementById("telemetry-hours"),
+    telemetryRefresh: document.getElementById("telemetry-refresh"),
+    telemetrySmoke: document.getElementById("telemetry-smoke"),
+    telemetrySubtitle: document.getElementById("telemetry-subtitle"),
+    telemetryEventCount: document.getElementById("telemetry-event-count"),
+    telemetryHighRiskCount: document.getElementById("telemetry-high-risk-count"),
+    telemetrySourceCount: document.getElementById("telemetry-source-count"),
+    telemetryLatestEvent: document.getElementById("telemetry-latest-event"),
+    telemetryAlertState: document.getElementById("telemetry-alert-state"),
+    telemetryLastUpdated: document.getElementById("telemetry-last-updated"),
+    telemetryPageLabel: document.getElementById("telemetry-page-label"),
+    telemetryPrevPage: document.getElementById("telemetry-prev-page"),
+    telemetryNextPage: document.getElementById("telemetry-next-page"),
+    telemetryEventsBody: document.getElementById("telemetry-events-body"),
+    telemetryTopSources: document.getElementById("telemetry-top-sources"),
+    telemetryTopTargets: document.getElementById("telemetry-top-targets"),
+    telemetryTrend: document.getElementById("telemetry-trend"),
+    telemetryGraphCopy: document.getElementById("telemetry-graph-copy"),
+    telemetryRiskFilter: document.getElementById("telemetry-risk-filter"),
+    telemetryCategoryFilter: document.getElementById("telemetry-category-filter"),
 };
 
 document.getElementById("add-route").addEventListener("click", () => {
@@ -103,6 +134,45 @@ document.getElementById("import-file").addEventListener("change", importConfigur
 elements.triggerUpdate.addEventListener("click", triggerSelfUpdate);
 elements.tabDashboard.addEventListener("click", () => setActiveView("dashboard"));
 elements.tabEmpty.addEventListener("click", () => setActiveView("empty"));
+elements.telemetryRefresh.addEventListener("click", () => loadTelemetry({ force: true }));
+elements.telemetrySmoke.addEventListener("click", runTelemetrySmokeTest);
+elements.telemetryHours.addEventListener("change", () => {
+    state.ui.telemetry.hours = Number.parseInt(elements.telemetryHours.value || "24", 10);
+    state.ui.telemetry.page = 1;
+    persistUiState();
+    loadTelemetry({ force: true });
+});
+elements.telemetryRiskFilter.addEventListener("change", () => {
+    state.ui.telemetry.riskLevel = elements.telemetryRiskFilter.value;
+    state.ui.telemetry.page = 1;
+    persistUiState();
+    loadTelemetry({ force: true });
+});
+elements.telemetryCategoryFilter.addEventListener("change", () => {
+    state.ui.telemetry.category = elements.telemetryCategoryFilter.value;
+    state.ui.telemetry.page = 1;
+    persistUiState();
+    loadTelemetry({ force: true });
+});
+elements.telemetryPrevPage.addEventListener("click", () => {
+    if (state.ui.telemetry.page <= 1) {
+        return;
+    }
+
+    state.ui.telemetry.page -= 1;
+    persistUiState();
+    loadTelemetry({ force: true });
+});
+elements.telemetryNextPage.addEventListener("click", () => {
+    const totalPages = Math.max(1, Math.ceil((state.telemetry.events.totalCount || 0) / state.ui.telemetry.pageSize));
+    if (state.ui.telemetry.page >= totalPages) {
+        return;
+    }
+
+    state.ui.telemetry.page += 1;
+    persistUiState();
+    loadTelemetry({ force: true });
+});
 document.getElementById("add-destination").addEventListener("click", () => {
     const cluster = getSelectedCluster();
     if (!cluster) {
@@ -142,6 +212,81 @@ async function loadConfiguration(selectionToRestore = null) {
     }
 
     render();
+
+    if (!state.telemetry.lastLoadedUtc || state.activeView === "empty") {
+        await loadTelemetry();
+    }
+}
+
+async function loadTelemetry({ force = false } = {}) {
+    const telemetryEnabled = !!state.configuration.settings?.telemetryEnabled;
+    if (!telemetryEnabled) {
+        state.telemetry.summary = null;
+        state.telemetry.events = { page: 1, pageSize: state.ui.telemetry.pageSize, totalCount: 0, events: [] };
+        state.telemetry.topSources = [];
+        state.telemetry.topTargets = [];
+        state.telemetry.trends = [];
+        state.telemetry.lastLoadedUtc = null;
+        renderTelemetry();
+        return;
+    }
+
+    const stale = !state.telemetry.lastLoadedUtc || (Date.now() - state.telemetry.lastLoadedUtc) > 15000;
+    if (!force && !stale) {
+        renderTelemetry();
+        return;
+    }
+
+    state.telemetry.isLoading = true;
+    state.telemetry.error = "";
+    renderTelemetry();
+
+    const hours = state.ui.telemetry.hours;
+    const page = state.ui.telemetry.page;
+    const pageSize = state.ui.telemetry.pageSize;
+    const riskLevel = encodeURIComponent(state.ui.telemetry.riskLevel);
+    const category = encodeURIComponent(state.ui.telemetry.category);
+
+    try {
+        const [summaryResponse, eventsResponse, topSourcesResponse, topTargetsResponse, trendResponse] = await Promise.all([
+            fetch(`/api/admin/telemetry/summary?hours=${hours}`),
+            fetch(`/api/admin/telemetry/events?hours=${hours}&page=${page}&pageSize=${pageSize}&riskLevel=${riskLevel}&category=${category}`),
+            fetch(`/api/admin/telemetry/top-sources?hours=${hours}&limit=6`),
+            fetch(`/api/admin/telemetry/top-targets?hours=${hours}&limit=6`),
+            fetch(`/api/admin/telemetry/trends?hours=${hours}&bucketMinutes=5`),
+        ]);
+
+        state.telemetry.summary = await summaryResponse.json();
+        state.telemetry.events = await eventsResponse.json();
+        state.telemetry.topSources = await topSourcesResponse.json();
+        state.telemetry.topTargets = await topTargetsResponse.json();
+        state.telemetry.trends = await trendResponse.json();
+        state.telemetry.lastLoadedUtc = Date.now();
+    } catch {
+        state.telemetry.error = "Could not load telemetry data from the admin API.";
+        setStatus(state.telemetry.error);
+    } finally {
+        state.telemetry.isLoading = false;
+        renderTelemetry();
+        renderHeaderState();
+    }
+}
+
+async function runTelemetrySmokeTest() {
+    const settings = state.configuration.settings || {};
+    const smokePath = settings.telemetrySmokePath || "/__helgrind/telemetry/smoke";
+    const publicEndpoint = settings.publicHttpsEndpointDisplay || `https://localhost:${settings.publicHttpsPort ?? 443}`;
+
+    try {
+        await fetch(`${publicEndpoint}${smokePath}`, { method: "GET" });
+        setStatus("Telemetry smoke test sent to the public listener.");
+    } catch {
+        setStatus("Telemetry smoke test sent. The public listener may reject the browser fetch, but the request should still be recorded.");
+    }
+
+    window.setTimeout(() => {
+        loadTelemetry({ force: true });
+    }, 800);
 }
 
 async function saveConfiguration() {
@@ -315,9 +460,22 @@ function render() {
     renderListsOnly();
     renderEditor();
     renderSettings();
+    renderTelemetry();
 }
 
 function renderHeaderState() {
+    if (state.activeView === "empty") {
+        const summary = state.telemetry.summary;
+        if (!state.configuration.settings?.telemetryEnabled) {
+            elements.headerSelection.textContent = "Telemetry is disabled for this Helgrind instance.";
+        } else if (summary) {
+            elements.headerSelection.textContent = `${summary.eventCount} suspicious event(s) in the last ${summary.windowHours}h | ${summary.highRiskEventCount} high risk | ${summary.uniqueSourceCount} source(s)`;
+        } else {
+            elements.headerSelection.textContent = "Loading telemetry from the public listener.";
+        }
+        return;
+    }
+
     const route = getSelectedRoute();
     const cluster = getSelectedCluster();
     const settings = state.configuration.settings || {};
@@ -481,6 +639,218 @@ function renderSettings() {
     elements.triggerUpdate.title = settings.selfUpdateStatus || "";
 }
 
+function renderTelemetry() {
+    const settings = state.configuration.settings || {};
+    const telemetryEnabled = !!settings.telemetryEnabled;
+    const summary = state.telemetry.summary;
+    const events = state.telemetry.events;
+    const totalPages = Math.max(1, Math.ceil((events.totalCount || 0) / state.ui.telemetry.pageSize));
+
+    elements.telemetryHours.value = String(state.ui.telemetry.hours);
+    elements.telemetryRiskFilter.value = state.ui.telemetry.riskLevel;
+    elements.telemetryCategoryFilter.value = state.ui.telemetry.category;
+    elements.telemetryGraphCopy.textContent = `Suspicious requests per 5 minutes across the last ${state.ui.telemetry.hours} hour(s).`;
+    elements.telemetryRefresh.disabled = !telemetryEnabled || state.telemetry.isLoading;
+    elements.telemetrySmoke.disabled = !telemetryEnabled;
+    elements.telemetryPrevPage.disabled = state.telemetry.isLoading || state.ui.telemetry.page <= 1;
+    elements.telemetryNextPage.disabled = state.telemetry.isLoading || state.ui.telemetry.page >= totalPages;
+    elements.telemetryPageLabel.textContent = `Page ${state.ui.telemetry.page} of ${totalPages}`;
+    elements.telemetrySubtitle.textContent = telemetryEnabled
+        ? `Suspicious public traffic only. Retention: ${settings.telemetryRetentionDays || 30} days.`
+        : "Telemetry is disabled in configuration.";
+
+    if (!telemetryEnabled) {
+        elements.telemetryEventCount.textContent = "Off";
+        elements.telemetryHighRiskCount.textContent = "Off";
+        elements.telemetrySourceCount.textContent = "Off";
+        elements.telemetryLatestEvent.textContent = "Disabled";
+        elements.telemetryAlertState.textContent = "Enable telemetry in configuration to populate this view.";
+        elements.telemetryLastUpdated.textContent = "Telemetry is disabled.";
+        renderTelemetryList(elements.telemetryTopSources, []);
+        renderTelemetryList(elements.telemetryTopTargets, []);
+        renderTrend([]);
+        renderTelemetryEvents([]);
+        return;
+    }
+
+    elements.telemetryEventCount.textContent = summary ? String(summary.eventCount) : state.telemetry.isLoading ? "..." : "0";
+    elements.telemetryHighRiskCount.textContent = summary ? String(summary.highRiskEventCount) : state.telemetry.isLoading ? "..." : "0";
+    elements.telemetrySourceCount.textContent = summary ? String(summary.uniqueSourceCount) : state.telemetry.isLoading ? "..." : "0";
+    elements.telemetryLatestEvent.textContent = formatTimestamp(summary?.latestEventUtc, true) || (state.telemetry.isLoading ? "Loading" : "Never");
+    elements.telemetryAlertState.textContent = settings.telemetryAlertingEnabled
+        ? buildAlertSummary(summary)
+        : "Webhook alerts inactive.";
+    elements.telemetryLastUpdated.textContent = state.telemetry.error
+        ? state.telemetry.error
+        : state.telemetry.isLoading
+            ? "Refreshing telemetry..."
+            : `Updated ${formatRelativeTime(state.telemetry.lastLoadedUtc)}. Filters: ${state.ui.telemetry.riskLevel}/${state.ui.telemetry.category}.`;
+
+    renderTelemetryEvents(events.events || []);
+    renderTelemetryList(elements.telemetryTopSources, state.telemetry.topSources, renderTopSourceItem);
+    renderTelemetryList(elements.telemetryTopTargets, state.telemetry.topTargets, renderTopTargetItem);
+    renderTrend(state.telemetry.trends || []);
+}
+
+function renderTelemetryEvents(events) {
+    elements.telemetryEventsBody.innerHTML = "";
+    if (!events.length) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td colspan="5" class="telemetry-empty-row">No suspicious events in this window.</td>`;
+        elements.telemetryEventsBody.appendChild(row);
+        return;
+    }
+
+    events.forEach(event => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${escapeHtml(formatTimestamp(event.occurredUtc, false) || "Unknown")}</td>
+            <td><span class="telemetry-risk telemetry-risk-${escapeHtml((event.riskLevel || "low").toLowerCase())}">${escapeHtml(event.riskLevel || "Low")}</span></td>
+            <td>
+                <strong>${escapeHtml(event.remoteAddress || "unknown")}</strong>
+                <span>${escapeHtml(event.method || "GET")} ${escapeHtml(String(event.statusCode ?? ""))}</span>
+            </td>
+            <td>
+                <strong>${escapeHtml(event.host || "unknown")}</strong>
+                <span>${escapeHtml(event.path || "/")}</span>
+            </td>
+            <td>
+                <strong>${escapeHtml(event.category || "Unknown")}</strong>
+                <span>${escapeHtml(event.reason || "")}</span>
+            </td>`;
+        elements.telemetryEventsBody.appendChild(row);
+    });
+}
+
+function renderTelemetryList(container, items, formatter = value => value) {
+    container.innerHTML = "";
+    if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "list-empty telemetry-list-empty";
+        empty.textContent = "No telemetry data yet.";
+        container.appendChild(empty);
+        return;
+    }
+
+    items.forEach(item => {
+        container.appendChild(formatter(item));
+    });
+}
+
+function renderTopSourceItem(item) {
+    const element = document.createElement("div");
+    element.className = "telemetry-list-item";
+    element.innerHTML = `
+        <div>
+            <strong>${escapeHtml(item.remoteAddress || "unknown")}</strong>
+            <span>${escapeHtml(item.highestRiskLevel || "Low")} risk | last ${escapeHtml(formatTimestamp(item.lastSeenUtc, false) || "unknown")}</span>
+        </div>
+        <span class="count">${escapeHtml(String(item.eventCount || 0))}</span>`;
+    return element;
+}
+
+function renderTopTargetItem(item) {
+    const element = document.createElement("div");
+    element.className = "telemetry-list-item";
+    element.innerHTML = `
+        <div>
+            <strong>${escapeHtml(item.path || "/")}</strong>
+            <span>${escapeHtml(item.host || "unknown")} | ${escapeHtml(item.highestRiskLevel || "Low")} risk</span>
+        </div>
+        <span class="count">${escapeHtml(String(item.eventCount || 0))}</span>`;
+    return element;
+}
+
+function renderTrend(buckets) {
+    elements.telemetryTrend.innerHTML = "";
+    if (!buckets.length) {
+        const empty = document.createElement("div");
+        empty.className = "list-empty telemetry-list-empty";
+        empty.textContent = "No 5-minute request data yet.";
+        elements.telemetryTrend.appendChild(empty);
+        return;
+    }
+
+    const width = 560;
+    const height = 220;
+    const padding = { top: 16, right: 16, bottom: 34, left: 36 };
+    const maxCount = Math.max(...buckets.map(bucket => bucket.eventCount || 0), 1);
+    const usableWidth = width - padding.left - padding.right;
+    const usableHeight = height - padding.top - padding.bottom;
+    const getX = index => padding.left + ((usableWidth / Math.max(1, buckets.length - 1)) * index);
+    const getY = count => padding.top + usableHeight - ((count / maxCount) * usableHeight);
+
+    const points = buckets
+        .map((bucket, index) => `${getX(index).toFixed(2)},${getY(bucket.eventCount || 0).toFixed(2)}`)
+        .join(" ");
+    const areaPoints = `${padding.left},${height - padding.bottom} ${points} ${getX(buckets.length - 1).toFixed(2)},${height - padding.bottom}`;
+
+    const shell = document.createElement("div");
+    shell.className = "telemetry-graph";
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("class", "telemetry-graph-svg");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Suspicious requests per 5 minutes graph");
+
+    [0, 0.5, 1].forEach(step => {
+        const y = padding.top + (usableHeight * step);
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", String(padding.left));
+        line.setAttribute("x2", String(width - padding.right));
+        line.setAttribute("y1", y.toFixed(2));
+        line.setAttribute("y2", y.toFixed(2));
+        line.setAttribute("class", "telemetry-grid-line");
+        svg.appendChild(line);
+    });
+
+    const area = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    area.setAttribute("points", areaPoints);
+    area.setAttribute("class", "telemetry-area-fill");
+    svg.appendChild(area);
+
+    const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    polyline.setAttribute("points", points);
+    polyline.setAttribute("class", "telemetry-line");
+    svg.appendChild(polyline);
+
+    buckets.forEach((bucket, index) => {
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", getX(index).toFixed(2));
+        circle.setAttribute("cy", getY(bucket.eventCount || 0).toFixed(2));
+        circle.setAttribute("r", "3");
+        circle.setAttribute("class", bucket.highRiskEventCount ? "telemetry-point high-risk" : "telemetry-point");
+
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        title.textContent = `${formatBucketLabel(bucket.bucketUtc)}: ${bucket.eventCount || 0} requests, ${bucket.highRiskEventCount || 0} high risk`;
+        circle.appendChild(title);
+        svg.appendChild(circle);
+    });
+
+    shell.appendChild(svg);
+
+    const labels = document.createElement("div");
+    labels.className = "telemetry-graph-labels";
+    labels.innerHTML = `
+        <span>${escapeHtml(formatBucketLabel(buckets[0].bucketUtc))}</span>
+        <span>Peak ${escapeHtml(String(maxCount))}</span>
+        <span>${escapeHtml(formatBucketLabel(buckets[buckets.length - 1].bucketUtc))}</span>`;
+    shell.appendChild(labels);
+
+    const summary = document.createElement("div");
+    summary.className = "telemetry-graph-summary";
+    const totalRequests = buckets.reduce((sum, bucket) => sum + (bucket.eventCount || 0), 0);
+    const totalHighRisk = buckets.reduce((sum, bucket) => sum + (bucket.highRiskEventCount || 0), 0);
+    summary.innerHTML = `
+        <span><strong>${escapeHtml(String(totalRequests))}</strong> suspicious requests</span>
+        <span><strong>${escapeHtml(String(totalHighRisk))}</strong> high risk</span>
+        <span><strong>${escapeHtml(String(buckets.length))}</strong> five-minute buckets</span>`;
+    shell.appendChild(summary);
+
+    elements.telemetryTrend.appendChild(shell);
+}
+
 function renderViewTabs() {
     const dashboardActive = state.activeView === "dashboard";
     elements.tabDashboard.classList.toggle("active", dashboardActive);
@@ -514,6 +884,14 @@ function selectItem(type, id) {
 function setActiveView(view) {
     state.activeView = view;
     renderViewTabs();
+    renderHeaderState();
+    if (view === "empty") {
+        ensureTelemetryAutoRefresh();
+        loadTelemetry();
+        return;
+    }
+
+    stopTelemetryAutoRefresh();
 }
 
 function getSelectedRoute() {
@@ -715,13 +1093,120 @@ function loadUiState() {
                 referencedOnly: !!stored?.clusterFilters?.referencedOnly,
                 healthEnabledOnly: !!stored?.clusterFilters?.healthEnabledOnly,
             },
+            telemetry: {
+                hours: Number.parseInt(stored?.telemetry?.hours || "24", 10) || 24,
+                page: Number.parseInt(stored?.telemetry?.page || "1", 10) || 1,
+                pageSize: 25,
+                riskLevel: stored?.telemetry?.riskLevel || "All",
+                category: stored?.telemetry?.category || "All",
+            },
         };
     } catch {
         return {
             routeFilters: { expanded: false, search: "", selectedClusterOnly: false, hostsOnly: false },
             clusterFilters: { expanded: false, search: "", referencedOnly: false, healthEnabledOnly: false },
+            telemetry: { hours: 24, page: 1, pageSize: 25, riskLevel: "All", category: "All" },
         };
     }
+}
+
+function ensureTelemetryAutoRefresh() {
+    if (telemetryRefreshTimer !== null) {
+        return;
+    }
+
+    telemetryRefreshTimer = window.setInterval(() => {
+        if (document.hidden || state.activeView !== "empty") {
+            return;
+        }
+
+        loadTelemetry();
+    }, 15000);
+}
+
+function stopTelemetryAutoRefresh() {
+    if (telemetryRefreshTimer === null) {
+        return;
+    }
+
+    window.clearInterval(telemetryRefreshTimer);
+    telemetryRefreshTimer = null;
+}
+
+function buildAlertSummary(summary) {
+    if (!summary?.alertingConfigured) {
+        return "Webhook alerts inactive.";
+    }
+
+    const fragments = [`Webhook armed for ${summary.alertMinimumRiskLevel || "High"} risk events.`];
+    if (summary.lastAlertSentUtc) {
+        fragments.push(`Last delivery ${formatRelativeTime(summary.lastAlertSentUtc)}.`);
+    }
+
+    if (summary.alertCooldownUntilUtc && new Date(summary.alertCooldownUntilUtc).getTime() > Date.now()) {
+        fragments.push(`Cooldown until ${new Date(summary.alertCooldownUntilUtc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`);
+    }
+
+    if (summary.alertStatus) {
+        fragments.push(summary.alertStatus);
+    }
+
+    return fragments.join(" ");
+}
+
+function formatTimestamp(value, allowRelativeFallback) {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    if (allowRelativeFallback) {
+        return formatRelativeTime(date.getTime());
+    }
+
+    return date.toLocaleString();
+}
+
+function formatRelativeTime(value) {
+    if (!value) {
+        return "just now";
+    }
+
+    const timestamp = typeof value === "number" ? value : new Date(value).getTime();
+    const deltaSeconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
+    if (deltaSeconds < 5) {
+        return "just now";
+    }
+
+    if (deltaSeconds < 60) {
+        return `${deltaSeconds}s ago`;
+    }
+
+    const deltaMinutes = Math.round(deltaSeconds / 60);
+    if (deltaMinutes < 60) {
+        return `${deltaMinutes}m ago`;
+    }
+
+    const deltaHours = Math.round(deltaMinutes / 60);
+    if (deltaHours < 48) {
+        return `${deltaHours}h ago`;
+    }
+
+    const deltaDays = Math.round(deltaHours / 24);
+    return `${deltaDays}d ago`;
+}
+
+function formatBucketLabel(value) {
+    if (!value) {
+        return "Unknown";
+    }
+
+    const date = new Date(value);
+    return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function escapeHtml(value) {

@@ -109,6 +109,38 @@ Exports include certificate metadata only, not the raw PEM or key.
 - In Production, the update button works automatically when the standard Ubuntu source checkout exists at `/opt/helgrind-src` and contains `deploy/linux/update.sh`.
 - `Helgrind:SelfUpdateCommand` is still available as an override if you want a custom update flow.
 
+## Telemetry
+
+Helgrind now records suspicious public-listener traffic in SQLite for 30 days by default.
+
+It currently flags:
+
+- common exploit paths such as `/.env`, `/.git`, `/wp-admin`, and `/phpmyadmin`
+- unsupported methods such as `TRACE`, `CONNECT`, and `TRACK`
+- unmatched public route misses and host mismatches
+- short-window burst activity from one source IP
+
+It does not store request bodies, cookies, or authorization headers.
+
+Smoke-test path:
+
+- public path: `Helgrind:TelemetrySmokePath`
+- default value: `/__helgrind/telemetry/smoke`
+- behavior: Helgrind returns a local `404` from the public listener and records a `SmokeTest` telemetry event without forwarding the request to any backend
+
+Example validation flow:
+
+```powershell
+Invoke-WebRequest -Uri https://localhost:8443/__helgrind/telemetry/smoke -SkipCertificateCheck
+Invoke-RestMethod -Uri https://localhost:9443/api/admin/telemetry/events?hours=1&page=1&pageSize=10 -SkipCertificateCheck
+```
+
+Optional alerting:
+
+- set `Helgrind:TelemetryAlertWebhookUrl` to a Discord webhook URL or another endpoint that accepts `{"content":"..."}` JSON
+- `Helgrind:TelemetryAlertMinimumRiskScore` defaults to `3` for high-risk events only
+- `Helgrind:TelemetryAlertCooldownMinutes` defaults to `10` to avoid alert floods
+
 ## Restart Helpers
 
 Windows:

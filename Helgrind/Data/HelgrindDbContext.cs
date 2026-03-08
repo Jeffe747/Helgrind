@@ -14,6 +14,8 @@ public sealed class HelgrindDbContext(DbContextOptions<HelgrindDbContext> option
 
     public DbSet<StoredCertificateEntity> Certificates => Set<StoredCertificateEntity>();
 
+    public DbSet<SuspiciousRequestEventEntity> SuspiciousRequestEvents => Set<SuspiciousRequestEventEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ProxyClusterEntity>()
@@ -21,6 +23,18 @@ public sealed class HelgrindDbContext(DbContextOptions<HelgrindDbContext> option
             .WithOne(destination => destination.Cluster)
             .HasForeignKey(destination => destination.ClusterId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SuspiciousRequestEventEntity>()
+            .HasIndex(eventEntity => eventEntity.OccurredUtc);
+
+        modelBuilder.Entity<SuspiciousRequestEventEntity>()
+            .HasIndex(eventEntity => eventEntity.RemoteAddress);
+
+        modelBuilder.Entity<SuspiciousRequestEventEntity>()
+            .HasIndex(eventEntity => eventEntity.Category);
+
+        modelBuilder.Entity<SuspiciousRequestEventEntity>()
+            .HasIndex(eventEntity => eventEntity.RiskScore);
 
         modelBuilder.Entity<AppSettingsEntity>().HasData(new AppSettingsEntity { Id = 1 });
     }

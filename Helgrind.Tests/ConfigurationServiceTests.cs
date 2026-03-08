@@ -177,6 +177,45 @@ public sealed class ConfigurationServiceTests : IDisposable
         Assert.Single(status.Proxy.LoadedRoutes);
         Assert.Equal("route1", status.Proxy.LoadedRoutes[0].RouteId);
     }
+
+    [Fact]
+    public async Task InitializeAsync_RecreatesTelemetryTable_WhenDatabasePredatesTelemetrySchema()
+    {
+        await using var seedContext = CreateDbContext();
+        await seedContext.Database.EnsureCreatedAsync();
+        await seedContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS \"SuspiciousRequestEvents\"");
+
+        await using var dbContext = CreateDbContext();
+        var hostEnvironment = new TestWebHostEnvironment(_contentRootPath);
+        var options = Microsoft.Extensions.Options.Options.Create(new HelgrindOptions
+        {
+            PublicHttpsPort = 443,
+            AdminHttpsPort = 8444,
+            DatabasePath = "App_Data/helgrind.db",
+            CertificateStoragePath = "App_Data/certificates"
+        });
+        var runtimeState = new CertificateRuntimeState();
+        var certificateService = new CertificateService(dbContext, runtimeState, hostEnvironment, options);
+        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, new TestHostApplicationLifetime(), NullLogger<SelfUpdateService>.Instance);
+        var configurationService = new ConfigurationService(
+            dbContext,
+            new ProxyConfigFactory(),
+            new InMemoryProxyConfigProvider(),
+            certificateService,
+            options,
+            hostEnvironment,
+            new AdminAccessService(options),
+            selfUpdateService);
+
+        await configurationService.InitializeAsync(CancellationToken.None);
+
+        await using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SuspiciousRequestEvents'";
+        var tableCount = Convert.ToInt32(await command.ExecuteScalarAsync());
+
+        Assert.Equal(1, tableCount);
+    }
+
     [Fact]
     public void Normalize_TrimsAndDeduplicatesRouteHosts()
     {

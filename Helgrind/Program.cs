@@ -29,10 +29,19 @@ builder.Services.AddSingleton(certificateRuntimeState);
 builder.Services.AddSingleton<AdminAccessService>();
 builder.Services.AddSingleton<SelfUpdateService>();
 builder.Services.AddSingleton<InMemoryProxyConfigProvider>();
+builder.Services.AddSingleton<TelemetryRateTracker>();
+builder.Services.AddSingleton<TelemetryEventSink>();
+builder.Services.AddSingleton<TelemetryRouteMatcher>();
+builder.Services.AddSingleton<TelemetryClassifierService>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<Yarp.ReverseProxy.Configuration.IProxyConfigProvider>(static serviceProvider => serviceProvider.GetRequiredService<InMemoryProxyConfigProvider>());
+builder.Services.AddHttpClient<TelemetryAlertService>();
+builder.Services.AddHostedService<TelemetryBackgroundService>();
 builder.Services.AddScoped<ProxyConfigFactory>();
 builder.Services.AddScoped<CertificateService>();
 builder.Services.AddScoped<ConfigurationService>();
+builder.Services.AddScoped<TelemetryQueryService>();
+builder.Services.AddScoped<TelemetryRetentionService>();
 builder.Services.AddDbContext<HelgrindDbContext>((serviceProvider, options) =>
 {
 	var helgrindOptions = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<HelgrindOptions>>().Value;
@@ -107,6 +116,8 @@ app.MapWhen(context => context.Connection.LocalPort == helgrindOptions.AdminHttp
 app.MapWhen(context => context.Connection.LocalPort == helgrindOptions.PublicHttpsPort, publicApp =>
 {
 	publicApp.UseRouting();
+	publicApp.UseMiddleware<PublicTelemetryMiddleware>();
+	publicApp.UseMiddleware<PublicTelemetrySmokeMiddleware>();
 	publicApp.UseEndpoints(endpoints =>
 	{
 		endpoints.MapReverseProxy();

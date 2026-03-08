@@ -92,6 +92,14 @@ public sealed class SettingsDto
     public string SelfUpdateStatus { get; set; } = string.Empty;
 
     public string SelfUpdateButtonLabel { get; set; } = "Update Helgrind";
+
+    public bool TelemetryEnabled { get; set; }
+
+    public int TelemetryRetentionDays { get; set; }
+
+    public string TelemetrySmokePath { get; set; } = string.Empty;
+
+    public bool TelemetryAlertingEnabled { get; set; }
 }
 
 public sealed class CertificateMetadataDto

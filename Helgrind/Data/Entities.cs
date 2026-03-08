@@ -87,3 +87,35 @@ public sealed class StoredCertificateEntity
 
     public bool IsActive { get; set; }
 }
+
+public sealed class SuspiciousRequestEventEntity
+{
+    [Key]
+    public long Id { get; set; }
+
+    public DateTimeOffset OccurredUtc { get; set; }
+
+    public string RemoteAddress { get; set; } = string.Empty;
+
+    public string Host { get; set; } = string.Empty;
+
+    public string Method { get; set; } = string.Empty;
+
+    public string Path { get; set; } = string.Empty;
+
+    public string QuerySummary { get; set; } = string.Empty;
+
+    public int StatusCode { get; set; }
+
+    public string? MatchedRouteId { get; set; }
+
+    public string? MatchedClusterId { get; set; }
+
+    public string Category { get; set; } = string.Empty;
+
+    public string RiskLevel { get; set; } = string.Empty;
+
+    public int RiskScore { get; set; }
+
+    public string Reason { get; set; } = string.Empty;
+}

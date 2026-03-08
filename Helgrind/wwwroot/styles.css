@@ -87,10 +87,292 @@ select {
     flex: 1;
 }
 
-.telemetry-empty {
+.telemetry-body {
     flex: 1;
     min-height: 0;
+    display: grid;
+    gap: 16px;
+    padding: 16px;
     background: var(--bg-logs);
+    overflow: auto;
+}
+
+.telemetry-heading {
+    display: grid;
+    gap: 4px;
+}
+
+.telemetry-subtitle,
+.telemetry-copy {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.telemetry-actions {
+    display: flex;
+    align-items: end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.telemetry-select-field {
+    display: grid;
+    gap: 6px;
+}
+
+.telemetry-select-field span {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-muted);
+}
+
+.telemetry-select-field select {
+    min-width: 130px;
+}
+
+.telemetry-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.telemetry-card {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg-pane) 92%, #000 8%), color-mix(in srgb, var(--bg-input) 90%, #000 10%));
+    box-shadow: var(--shadow-soft);
+}
+
+.telemetry-card strong {
+    font-size: 28px;
+    line-height: 1;
+}
+
+.telemetry-card.high-risk strong {
+    color: var(--status-error);
+}
+
+.telemetry-card-copy {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.telemetry-layout-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(320px, .9fr);
+    gap: 16px;
+    min-height: 0;
+}
+
+.telemetry-side-grid {
+    display: grid;
+    gap: 16px;
+    align-content: start;
+}
+
+.telemetry-panel {
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--bg-pane) 90%, #000 10%);
+    box-shadow: var(--shadow-soft);
+    overflow: hidden;
+}
+
+.telemetry-panel-main {
+    display: grid;
+    grid-template-rows: auto 1fr;
+}
+
+.telemetry-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg-pane) 82%, #000 18%);
+}
+
+.telemetry-panel-head h3 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-muted);
+}
+
+.telemetry-pager {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.telemetry-table-shell {
+    overflow: auto;
+}
+
+.telemetry-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.telemetry-table th,
+.telemetry-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+    font-size: 12px;
+}
+
+.telemetry-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: color-mix(in srgb, var(--bg-pane) 80%, #000 20%);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.telemetry-table td strong,
+.telemetry-list-item strong,
+.telemetry-trend-item strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-main);
+}
+
+.telemetry-table td span,
+.telemetry-list-item span,
+.telemetry-trend-item span,
+.telemetry-empty-row {
+    color: var(--text-muted);
+}
+
+.telemetry-empty-row {
+    text-align: center;
+}
+
+.telemetry-risk {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 58px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    font-size: 11px;
+}
+
+.telemetry-risk-high {
+    color: var(--status-error);
+    border-color: color-mix(in srgb, var(--status-error) 42%, var(--border));
+    background: color-mix(in srgb, var(--status-error) 10%, transparent);
+}
+
+.telemetry-risk-medium {
+    color: var(--status-reconnecting);
+    border-color: color-mix(in srgb, var(--status-reconnecting) 42%, var(--border));
+    background: color-mix(in srgb, var(--status-reconnecting) 10%, transparent);
+}
+
+.telemetry-risk-low {
+    color: var(--status-live);
+    border-color: color-mix(in srgb, var(--status-live) 42%, var(--border));
+    background: color-mix(in srgb, var(--status-live) 10%, transparent);
+}
+
+.telemetry-list,
+.telemetry-trend-list {
+    display: grid;
+}
+
+.telemetry-list-item,
+.telemetry-trend-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.telemetry-list-item:last-child,
+.telemetry-trend-item:last-child {
+    border-bottom: none;
+}
+
+.telemetry-list-empty {
+    margin: 14px;
+}
+
+.telemetry-graph-shell {
+    padding: 14px;
+}
+
+.telemetry-graph {
+    display: grid;
+    gap: 10px;
+}
+
+.telemetry-graph-svg {
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg-input) 90%, #061018 10%), color-mix(in srgb, var(--bg-pane) 92%, #000 8%));
+}
+
+.telemetry-grid-line {
+    stroke: color-mix(in srgb, var(--border) 84%, #9ab0c4 16%);
+    stroke-width: 1;
+}
+
+.telemetry-area-fill {
+    fill: color-mix(in srgb, var(--status-live) 16%, transparent);
+}
+
+.telemetry-line {
+    fill: none;
+    stroke: color-mix(in srgb, var(--status-live) 72%, #8fb8ff 28%);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.telemetry-point {
+    fill: var(--text-main);
+    stroke: color-mix(in srgb, var(--status-live) 60%, #000 40%);
+    stroke-width: 1.5;
+}
+
+.telemetry-point.high-risk {
+    fill: var(--status-error);
+    stroke: color-mix(in srgb, var(--status-error) 70%, #000 30%);
+}
+
+.telemetry-graph-labels,
+.telemetry-graph-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.telemetry-graph-summary strong {
+    color: var(--text-main);
+    margin-right: 4px;
 }
 
 .header,
@@ -735,7 +1017,9 @@ button:focus-visible,
     .layout,
     .workspace,
     .health-grid,
-    .health-summary {
+    .health-summary,
+    .telemetry-summary-grid,
+    .telemetry-layout-grid {
         grid-template-columns: 1fr;
     }
 
@@ -793,6 +1077,12 @@ button:focus-visible,
         max-width: none;
         width: 100%;
     }
+
+    .telemetry-panel-head,
+    .telemetry-actions,
+    .telemetry-pager {
+        flex-wrap: wrap;
+    }
 }
 
 @media (max-width: 720px) {
@@ -807,4 +1097,28 @@ button:focus-visible,
     .restart-banner { padding: 12px; }
 
     .health-grid { padding: 12px; }
+
+    .telemetry-body { padding: 12px; }
+
+    .telemetry-graph-labels,
+    .telemetry-graph-summary {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .telemetry-table th,
+    .telemetry-table td {
+        padding: 10px 12px;
+    }
+}
+
+.telemetry-select-field.compact {
+    min-width: 120px;
+}
+
+.telemetry-panel-controls {
+    display: flex;
+    align-items: end;
+    gap: 8px;
+    flex-wrap: wrap;
 }

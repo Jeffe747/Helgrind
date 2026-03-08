@@ -22,9 +22,45 @@ public sealed class ConfigurationService(
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         await dbContext.Database.EnsureCreatedAsync(cancellationToken);
+        await EnsureIncrementalSchemaAsync(cancellationToken);
         await EnsureSettingsAsync(cancellationToken);
         await certificateService.InitializeAsync(cancellationToken);
         await ApplyAsync(cancellationToken);
+    }
+
+    private async Task EnsureIncrementalSchemaAsync(CancellationToken cancellationToken)
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"CREATE TABLE IF NOT EXISTS ""SuspiciousRequestEvents"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_SuspiciousRequestEvents"" PRIMARY KEY AUTOINCREMENT,
+                ""OccurredUtc"" TEXT NOT NULL,
+                ""RemoteAddress"" TEXT NOT NULL,
+                ""Host"" TEXT NOT NULL,
+                ""Method"" TEXT NOT NULL,
+                ""Path"" TEXT NOT NULL,
+                ""QuerySummary"" TEXT NOT NULL,
+                ""StatusCode"" INTEGER NOT NULL,
+                ""MatchedRouteId"" TEXT NULL,
+                ""MatchedClusterId"" TEXT NULL,
+                ""Category"" TEXT NOT NULL,
+                ""RiskLevel"" TEXT NOT NULL,
+                ""RiskScore"" INTEGER NOT NULL,
+                ""Reason"" TEXT NOT NULL
+            );",
+            cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"CREATE INDEX IF NOT EXISTS ""IX_SuspiciousRequestEvents_OccurredUtc"" ON ""SuspiciousRequestEvents"" (""OccurredUtc"");",
+            cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"CREATE INDEX IF NOT EXISTS ""IX_SuspiciousRequestEvents_RemoteAddress"" ON ""SuspiciousRequestEvents"" (""RemoteAddress"");",
+            cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"CREATE INDEX IF NOT EXISTS ""IX_SuspiciousRequestEvents_Category"" ON ""SuspiciousRequestEvents"" (""Category"");",
+            cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"CREATE INDEX IF NOT EXISTS ""IX_SuspiciousRequestEvents_RiskScore"" ON ""SuspiciousRequestEvents"" (""RiskScore"");",
+            cancellationToken);
     }
 
     public async Task<HelgrindConfigurationDto> GetConfigurationAsync(CancellationToken cancellationToken)
@@ -102,6 +138,10 @@ public sealed class ConfigurationService(
                 SelfUpdateEnabled = selfUpdateService.IsConfigured,
                 SelfUpdateStatus = selfUpdateService.GetStatusMessage(),
                 SelfUpdateButtonLabel = selfUpdateService.ButtonLabel,
+                TelemetryEnabled = options.Value.TelemetryEnabled,
+                TelemetryRetentionDays = Math.Max(1, options.Value.TelemetryRetentionDays),
+                TelemetrySmokePath = options.Value.TelemetrySmokePath,
+                TelemetryAlertingEnabled = !string.IsNullOrWhiteSpace(options.Value.TelemetryAlertWebhookUrl),
             }
         };
     }
