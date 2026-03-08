@@ -13,71 +13,95 @@
                 <div class="title">Helgrind</div>
                 <div class="subtitle">Reverse proxy gateway control plane</div>
             </div>
-            <div id="header-selection" class="header-selection">Public proxy and private admin listeners are configured.</div>
             <div class="header-right toolbar">
+                <button id="trigger-update" class="header-button hidden" type="button">Update Helgrind</button>
+                <div id="header-selection" class="header-selection">Public proxy and private admin listeners are configured.</div>
                 <span id="dashboard-status" class="status live">
                     <span class="status-dot"></span>
                     <span id="dashboard-status-label">LAN ONLY</span>
                 </span>
-                <button id="trigger-update" class="header-button hidden" type="button">Update Helgrind</button>
-                <a class="button-link header-button" href="/health.html">Health</a>
-                <button id="save-config" class="primary header-button">Save Draft</button>
-                <button id="apply-config" class="header-button">Apply Proxy</button>
-                <button id="export-config" class="header-button">Export</button>
-                <button id="import-config" class="header-button">Import</button>
+                <div class="header-actions">
+                    <button id="import-config" class="header-button" type="button">Import</button>
+                    <button id="export-config" class="header-button" type="button">Export</button>
+                </div>
+                <details class="header-menu" id="certificate-menu">
+                    <summary class="header-button">Certificate</summary>
+                    <div class="menu-panel certificate-panel">
+                        <div>
+                            <p class="eyebrow">TLS</p>
+                            <h3>Certificate Upload</h3>
+                            <p id="certificate-description">Upload a PEM fullchain and key to replace the active TLS certificate.</p>
+                            <p class="helper-copy">Helgrind stores the PEM and key immediately, but the Kestrel HTTPS listener switches to the new certificate on restart.</p>
+                        </div>
+                        <form id="certificate-form" class="certificate-form">
+                            <label>
+                                <span>Display Name</span>
+                                <input id="certificate-name" type="text" autocomplete="off" placeholder="icicle.dk wildcard">
+                            </label>
+                            <label>
+                                <span>PEM File</span>
+                                <input id="certificate-pem" type="file" accept=".pem,text/plain">
+                            </label>
+                            <label>
+                                <span>Key File</span>
+                                <input id="certificate-key" type="file" accept=".key,.pem,text/plain">
+                            </label>
+                            <button type="submit" class="primary">Upload Certificate</button>
+                        </form>
+                    </div>
+                </details>
                 <input id="import-file" type="file" accept="application/json" hidden>
             </div>
         </header>
 
-        <section class="status-strip">
-            <div>
-                <span class="label">Public Proxy</span>
-                <strong id="public-https-endpoint">https://localhost:443</strong>
-            </div>
-            <div>
-                <span class="label">Admin Dashboard</span>
-                <strong id="admin-https-endpoint">https://localhost:8444</strong>
-            </div>
-            <div>
-                <span class="label">Environment</span>
-                <strong id="environment-name">Loading</strong>
-            </div>
-            <div>
-                <span class="label">Certificate</span>
-                <strong id="certificate-state">Loading</strong>
-            </div>
-            <div>
-                <span class="label">Last Applied</span>
-                <strong id="last-applied">Never</strong>
-            </div>
-            <div class="status-message" id="status-message">Loading configuration…</div>
-        </section>
+        <nav class="view-tabs" aria-label="Dashboard views">
+            <button id="tab-dashboard" class="view-tab active" type="button" aria-selected="true">Gateway</button>
+            <button id="tab-empty" class="view-tab" type="button" aria-selected="false">Telemetry</button>
+        </nav>
 
-        <section class="status-strip network-strip">
-            <div>
-                <span class="label">Admin Access Policy</span>
-                <strong id="admin-network-policy">Loading</strong>
-            </div>
-            <div class="status-message">Expose only the public proxy port outside your network. Keep the admin port off router/NAT forwards.</div>
-        </section>
+        <div class="toast-region" aria-live="polite" aria-atomic="true">
+            <button id="status-toast" class="status-toast hidden" type="button" aria-label="Dismiss status message">
+                <span id="status-toast-message"></span>
+                <span class="toast-dismiss">Click to dismiss</span>
+            </button>
+        </div>
 
-        <section id="restart-banner" class="restart-banner hidden">
-            <div>
-                <p class="eyebrow">Certificate Restart Required</p>
-                <h2>Helgrind is still serving the previous HTTPS certificate</h2>
-                <p id="restart-hint">Restart the process after replacing the certificate so Kestrel loads the stored PEM and key.</p>
-            </div>
-            <div class="restart-actions">
-                <code>scripts/restart-helgrind.ps1</code>
-                <code>scripts/restart-helgrind.sh</code>
-            </div>
-        </section>
+        <section id="dashboard-view" class="view-panel active">
+            <section class="status-strip">
+                <div>
+                    <span class="label">Public Proxy</span>
+                    <strong id="public-https-endpoint">https://localhost:443</strong>
+                </div>
+                <div>
+                    <span class="label">Environment</span>
+                    <strong id="environment-name">Loading</strong>
+                </div>
+                <div>
+                    <span class="label">Certificate</span>
+                    <strong id="certificate-state">Loading</strong>
+                </div>
+                <div>
+                    <span class="label">Last Applied</span>
+                    <strong id="last-applied">Never</strong>
+                </div>
+            </section>
 
-        <main class="layout workspace">
+            <section id="restart-banner" class="restart-banner hidden">
+                <div>
+                    <p class="eyebrow">Certificate Restart Required</p>
+                    <h2>Helgrind is still serving the previous HTTPS certificate</h2>
+                    <p id="restart-hint">Restart the process after replacing the certificate so Kestrel loads the stored PEM and key.</p>
+                </div>
+                <div class="restart-actions">
+                    <code>scripts/restart-helgrind.ps1</code>
+                    <code>scripts/restart-helgrind.sh</code>
+                </div>
+            </section>
+
+            <main class="layout workspace gateway-layout">
             <section class="pane column list-column">
-                <div class="column-header">
-                    <div>
-                        <p class="eyebrow">Routes</p>
+                <div class="column-header pane-head column-head">
+                    <div class="column-head-title-group">
                         <h2>Public Entry Points</h2>
                     </div>
                     <button id="add-route">Add Route</button>
@@ -104,9 +128,8 @@
             </section>
 
             <section class="pane column list-column">
-                <div class="column-header">
-                    <div>
-                        <p class="eyebrow">Clusters</p>
+                <div class="column-header pane-head column-head">
+                    <div class="column-head-title-group">
                         <h2>Backend Targets</h2>
                     </div>
                     <button id="add-cluster">Add Cluster</button>
@@ -133,9 +156,8 @@
             </section>
 
             <section class="pane logs-pane column detail-column">
-                <div class="column-header">
+                <div class="column-header pane-head detail-head">
                     <div>
-                        <p class="eyebrow">Editor</p>
                         <h2 id="editor-title">Select a route or cluster</h2>
                     </div>
                     <button id="delete-selected" class="danger">Delete</button>
@@ -166,6 +188,9 @@
                         <span>Order</span>
                         <input id="route-order" type="number">
                     </label>
+                    <div class="editor-actions">
+                        <button id="save-route" type="submit" class="primary">Save Route</button>
+                    </div>
                 </form>
 
                 <form id="cluster-editor" class="editor hidden">
@@ -215,33 +240,22 @@
                         </div>
                         <div id="destination-list" class="destination-list"></div>
                     </section>
-                </form>
-
-                <section class="certificate-card">
-                    <div>
-                        <p class="eyebrow">TLS</p>
-                        <h3>Certificate Upload</h3>
-                        <p id="certificate-description">Upload a PEM fullchain and key to replace the active TLS certificate.</p>
-                        <p class="helper-copy">Helgrind stores the PEM and key immediately, but the Kestrel HTTPS listener switches to the new certificate on restart.</p>
+                    <div class="editor-actions">
+                        <button id="save-cluster" type="submit" class="primary">Save Cluster</button>
                     </div>
-                    <form id="certificate-form" class="certificate-form">
-                        <label>
-                            <span>Display Name</span>
-                            <input id="certificate-name" type="text" autocomplete="off" placeholder="icicle.dk wildcard">
-                        </label>
-                        <label>
-                            <span>PEM File</span>
-                            <input id="certificate-pem" type="file" accept=".pem,text/plain">
-                        </label>
-                        <label>
-                            <span>Key File</span>
-                            <input id="certificate-key" type="file" accept=".key,.pem,text/plain">
-                        </label>
-                        <button type="submit" class="primary">Upload Certificate</button>
-                    </form>
-                </section>
+                </form>
             </section>
-        </main>
+            </main>
+        </section>
+
+        <section id="empty-view" class="view-panel hidden">
+            <div class="telemetry-shell pane detail-pane-shell">
+                <div class="pane-head detail-head">
+                    <h2>Telemetry</h2>
+                </div>
+                <div class="telemetry-empty"></div>
+            </div>
+        </section>
     </div>
 
     <template id="destination-row-template">

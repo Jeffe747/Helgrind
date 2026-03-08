@@ -2,7 +2,11 @@ const state = {
     configuration: { routes: [], clusters: [], settings: {} },
     selected: null,
     ui: loadUiState(),
+    activeView: "dashboard",
 };
+
+let statusToastTimer = null;
+let statusToastPinned = false;
 
 const elements = {
     routeList: document.getElementById("route-list"),
@@ -11,17 +15,20 @@ const elements = {
     dashboardStatus: document.getElementById("dashboard-status"),
     dashboardStatusLabel: document.getElementById("dashboard-status-label"),
     triggerUpdate: document.getElementById("trigger-update"),
+    tabDashboard: document.getElementById("tab-dashboard"),
+    tabEmpty: document.getElementById("tab-empty"),
+    dashboardView: document.getElementById("dashboard-view"),
+    emptyView: document.getElementById("empty-view"),
     editorTitle: document.getElementById("editor-title"),
     emptyState: document.getElementById("empty-state"),
     routeEditor: document.getElementById("route-editor"),
     clusterEditor: document.getElementById("cluster-editor"),
     destinationList: document.getElementById("destination-list"),
     template: document.getElementById("destination-row-template"),
-    statusMessage: document.getElementById("status-message"),
+    statusToast: document.getElementById("status-toast"),
+    statusToastMessage: document.getElementById("status-toast-message"),
     publicHttpsEndpoint: document.getElementById("public-https-endpoint"),
-    adminHttpsEndpoint: document.getElementById("admin-https-endpoint"),
     environmentName: document.getElementById("environment-name"),
-    adminNetworkPolicy: document.getElementById("admin-network-policy"),
     certificateState: document.getElementById("certificate-state"),
     lastApplied: document.getElementById("last-applied"),
     certificateDescription: document.getElementById("certificate-description"),
@@ -90,12 +97,12 @@ document.getElementById("delete-selected").addEventListener("click", () => {
     render();
 });
 
-document.getElementById("save-config").addEventListener("click", saveConfiguration);
-document.getElementById("apply-config").addEventListener("click", applyConfiguration);
 document.getElementById("export-config").addEventListener("click", exportConfiguration);
 document.getElementById("import-config").addEventListener("click", () => document.getElementById("import-file").click());
 document.getElementById("import-file").addEventListener("change", importConfiguration);
 elements.triggerUpdate.addEventListener("click", triggerSelfUpdate);
+elements.tabDashboard.addEventListener("click", () => setActiveView("dashboard"));
+elements.tabEmpty.addEventListener("click", () => setActiveView("empty"));
 document.getElementById("add-destination").addEventListener("click", () => {
     const cluster = getSelectedCluster();
     if (!cluster) {
@@ -110,6 +117,10 @@ document.getElementById("add-destination").addEventListener("click", () => {
 });
 
 document.getElementById("certificate-form").addEventListener("submit", uploadCertificate);
+document.getElementById("route-editor").addEventListener("submit", event => saveSelectedConfiguration(event, "route"));
+document.getElementById("cluster-editor").addEventListener("submit", event => saveSelectedConfiguration(event, "cluster"));
+elements.statusToast.addEventListener("mouseenter", pinStatusToast);
+elements.statusToast.addEventListener("click", hideStatusToast);
 
 bindRouteEditor();
 bindClusterEditor();
@@ -117,10 +128,19 @@ bindFilters();
 
 loadConfiguration();
 
-async function loadConfiguration() {
+async function loadConfiguration(selectionToRestore = null) {
     const response = await fetch("/api/admin/configuration");
     state.configuration = await response.json();
-    state.selected = null;
+    state.selected = selectionToRestore;
+
+    if (state.selected?.type === "route" && !getSelectedRoute()) {
+        state.selected = null;
+    }
+
+    if (state.selected?.type === "cluster" && !getSelectedCluster()) {
+        state.selected = null;
+    }
+
     render();
 }
 
@@ -132,20 +152,26 @@ async function saveConfiguration() {
     });
 
     state.configuration = await response.json();
-    setStatus("Draft saved to SQLite.");
     render();
 }
 
-async function applyConfiguration() {
+async function saveAndApplyConfiguration(statusPrefix, selectionToRestore = state.selected ? { ...state.selected } : null) {
     await saveConfiguration();
 
     const response = await fetch("/api/admin/apply", { method: "POST" });
     const result = await response.json();
     const message = result.validationErrors?.length
-        ? `${result.statusMessage} ${result.validationErrors.join(" ")}`
-        : result.statusMessage;
+        ? `${statusPrefix} ${result.statusMessage} ${result.validationErrors.join(" ")}`
+        : `${statusPrefix} ${result.statusMessage}`;
     setStatus(message);
-    await loadConfiguration();
+    await loadConfiguration(selectionToRestore);
+}
+
+async function saveSelectedConfiguration(event, kind) {
+    event.preventDefault();
+    const selection = state.selected ? { ...state.selected } : null;
+    const label = kind === "route" ? "Route saved." : "Cluster saved.";
+    await saveAndApplyConfiguration(label, selection);
 }
 
 async function exportConfiguration() {
@@ -201,6 +227,7 @@ async function uploadCertificate(event) {
     const result = await response.json();
     setStatus(result.statusMessage);
     event.target.reset();
+    document.getElementById("certificate-menu")?.removeAttribute("open");
     await loadConfiguration();
 }
 
@@ -282,6 +309,7 @@ function bindClusterEditor() {
 }
 
 function render() {
+    renderViewTabs();
     renderHeaderState();
     renderFilterState();
     renderListsOnly();
@@ -439,9 +467,7 @@ function renderDestinationList(cluster) {
 function renderSettings() {
     const settings = state.configuration.settings || {};
     elements.publicHttpsEndpoint.textContent = settings.publicHttpsEndpointDisplay || `https://localhost:${settings.publicHttpsPort ?? 443}`;
-    elements.adminHttpsEndpoint.textContent = settings.adminHttpsEndpointDisplay || `https://localhost:${settings.adminHttpsPort ?? 8444}`;
     elements.environmentName.textContent = settings.environmentName || "Unknown";
-    elements.adminNetworkPolicy.textContent = settings.adminAccessPolicySummary || "Configured LAN ranges";
     elements.certificateState.textContent = settings.usingFallbackCertificate
         ? "Temporary certificate"
         : settings.activeCertificate?.displayName || "Uploaded certificate";
@@ -453,6 +479,16 @@ function renderSettings() {
     elements.triggerUpdate.disabled = !settings.selfUpdateEnabled;
     elements.triggerUpdate.textContent = settings.selfUpdateButtonLabel || "Update Helgrind";
     elements.triggerUpdate.title = settings.selfUpdateStatus || "";
+}
+
+function renderViewTabs() {
+    const dashboardActive = state.activeView === "dashboard";
+    elements.tabDashboard.classList.toggle("active", dashboardActive);
+    elements.tabEmpty.classList.toggle("active", !dashboardActive);
+    elements.tabDashboard.setAttribute("aria-selected", String(dashboardActive));
+    elements.tabEmpty.setAttribute("aria-selected", String(!dashboardActive));
+    elements.dashboardView.classList.toggle("hidden", !dashboardActive);
+    elements.emptyView.classList.toggle("hidden", dashboardActive);
 }
 
 function renderFilterState() {
@@ -475,6 +511,11 @@ function selectItem(type, id) {
     state.selected = { type, id };
 }
 
+function setActiveView(view) {
+    state.activeView = view;
+    renderViewTabs();
+}
+
 function getSelectedRoute() {
     if (state.selected?.type !== "route") {
         return null;
@@ -492,7 +533,46 @@ function getSelectedCluster() {
 }
 
 function setStatus(message) {
-    elements.statusMessage.textContent = message;
+    if (!message) {
+        hideStatusToast();
+        return;
+    }
+
+    clearStatusToastTimer();
+    statusToastPinned = false;
+    elements.statusToastMessage.textContent = message;
+    elements.statusToast.classList.remove("hidden", "pinned");
+    elements.statusToast.classList.add("visible");
+    statusToastTimer = window.setTimeout(() => {
+        if (!statusToastPinned) {
+            hideStatusToast();
+        }
+    }, 2000);
+}
+
+function pinStatusToast() {
+    if (elements.statusToast.classList.contains("hidden") || statusToastPinned) {
+        return;
+    }
+
+    statusToastPinned = true;
+    clearStatusToastTimer();
+    elements.statusToast.classList.add("pinned");
+}
+
+function hideStatusToast() {
+    clearStatusToastTimer();
+    statusToastPinned = false;
+    elements.statusToast.classList.remove("visible", "pinned");
+    elements.statusToast.classList.add("hidden");
+    elements.statusToastMessage.textContent = "";
+}
+
+function clearStatusToastTimer() {
+    if (statusToastTimer !== null) {
+        window.clearTimeout(statusToastTimer);
+        statusToastTimer = null;
+    }
 }
 
 function bindFilters() {
