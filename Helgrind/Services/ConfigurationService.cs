@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Helgrind.Contracts;
 using Helgrind.Data;
@@ -117,6 +118,8 @@ public sealed class ConfigurationService(
             {
                 PublicHttpsPort = options.Value.PublicHttpsPort,
                 AdminHttpsPort = options.Value.AdminHttpsPort,
+                RuntimeVersionDisplay = GetRuntimeVersionDisplay(),
+                RuntimeVersionDetails = GetRuntimeVersionDetails(),
                 EnvironmentName = environment.EnvironmentName,
                 PublicHttpsEndpointDisplay = GetPublicHttpsEndpointDisplay(),
                 AdminHttpsEndpointDisplay = GetAdminHttpsEndpointDisplay(),
@@ -125,14 +128,11 @@ public sealed class ConfigurationService(
                 LastImportedUtc = settings.LastImportedUtc,
                 ActiveCertificate = activeCertificate,
                 ImportedCertificateHint = string.IsNullOrWhiteSpace(settings.ImportedCertificateDisplayName)
-                    using System.Reflection;
                     ? null
                     : new CertificateMetadataDto
                     {
                         DisplayName = settings.ImportedCertificateDisplayName,
                         Thumbprint = settings.ImportedCertificateThumbprint ?? string.Empty,
-                                    RuntimeVersionDisplay = GetRuntimeVersionDisplay(),
-                                    RuntimeVersionDetails = GetRuntimeVersionDetails(),
                     },
                 UsingFallbackCertificate = certificateService.UsingFallbackCertificate,
                 CertificateRestartRequired = certificateRestartRequired,
@@ -144,135 +144,6 @@ public sealed class ConfigurationService(
                 TelemetryEnabled = options.Value.TelemetryEnabled,
                 TelemetryRetentionDays = Math.Max(1, options.Value.TelemetryRetentionDays),
                 TelemetrySmokePath = options.Value.TelemetrySmokePath,
-                        private string GetRuntimeVersionDisplay()
-                        {
-                            var version = GetAssemblyVersionCore();
-                            var commit = GetDisplayedCommit();
-                            return string.IsNullOrWhiteSpace(commit)
-                                ? $"v{version}"
-                                : $"v{version} · {commit}";
-                        }
-
-                        private string GetRuntimeVersionDetails()
-                        {
-                            var details = new List<string>
-                            {
-                                $"Version {GetAssemblyVersionCore()}"
-                            };
-
-                            var assemblyCommit = GetAssemblyCommit();
-                            if (!string.IsNullOrWhiteSpace(assemblyCommit))
-                            {
-                                details.Add($"Build commit {assemblyCommit}");
-                            }
-
-                            var deployedCommit = GetDeployedCommit();
-                            if (!string.IsNullOrWhiteSpace(deployedCommit))
-                            {
-                                details.Add($"Deployed ref {deployedCommit}");
-                            }
-
-                            return string.Join(" | ", details);
-                        }
-
-                        private string GetAssemblyVersionCore()
-                        {
-                            var informationalVersion = GetInformationalVersion();
-                            if (!string.IsNullOrWhiteSpace(informationalVersion))
-                            {
-                                return informationalVersion.Split('+', 2, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)[0];
-                            }
-
-                            return typeof(ConfigurationService).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
-                        }
-
-                        private string? GetDisplayedCommit()
-                        {
-                            var deployedCommit = GetDeployedCommit();
-                            if (!string.IsNullOrWhiteSpace(deployedCommit))
-                            {
-                                return ShortenCommit(deployedCommit);
-                            }
-
-                            var assemblyCommit = GetAssemblyCommit();
-                            return string.IsNullOrWhiteSpace(assemblyCommit)
-                                ? null
-                                : ShortenCommit(assemblyCommit);
-                        }
-
-                        private string? GetAssemblyCommit()
-                        {
-                            var informationalVersion = GetInformationalVersion();
-                            if (string.IsNullOrWhiteSpace(informationalVersion))
-                            {
-                                return null;
-                            }
-
-                            var separatorIndex = informationalVersion.IndexOf('+');
-                            if (separatorIndex < 0 || separatorIndex == informationalVersion.Length - 1)
-                            {
-                                return null;
-                            }
-
-                            return informationalVersion[(separatorIndex + 1)..].Trim();
-                        }
-
-                        private static string? GetInformationalVersion()
-                        {
-                            return typeof(ConfigurationService).Assembly
-                                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-                                .InformationalVersion?
-                                .Trim();
-                        }
-
-                        private static string ShortenCommit(string commit)
-                        {
-                            var trimmed = commit.Trim();
-                            return trimmed.Length <= 8 ? trimmed : trimmed[..8];
-                        }
-
-                        private static string? GetDeployedCommit()
-                        {
-                            var configuredPath = Environment.GetEnvironmentVariable("HELGRIND_DEPLOYED_REF_FILE");
-                            var candidatePaths = new List<string>();
-
-                            if (!string.IsNullOrWhiteSpace(configuredPath))
-                            {
-                                candidatePaths.Add(configuredPath);
-                            }
-
-                            if (!OperatingSystem.IsWindows())
-                            {
-                                candidatePaths.Add("/var/lib/helgrind/deployed-ref.txt");
-                            }
-
-                            foreach (var path in candidatePaths
-                                .Where(static value => !string.IsNullOrWhiteSpace(value))
-                                .Distinct(StringComparer.OrdinalIgnoreCase))
-                            {
-                                try
-                                {
-                                    if (!File.Exists(path))
-                                    {
-                                        continue;
-                                    }
-
-                                    var commit = File.ReadAllText(path).Trim();
-                                    if (!string.IsNullOrWhiteSpace(commit))
-                                    {
-                                        return commit;
-                                    }
-                                }
-                                catch (IOException)
-                                {
-                                }
-                                catch (UnauthorizedAccessException)
-                                {
-                                }
-                            }
-
-                            return null;
-                        }
                 TelemetryAlertingEnabled = !string.IsNullOrWhiteSpace(options.Value.TelemetryAlertWebhookUrl),
             }
         };
@@ -520,6 +391,136 @@ public sealed class ConfigurationService(
             : options.Value.PublicHttpsPort == 443
                 ? "https://*:443"
                 : $"https://*:{options.Value.PublicHttpsPort}";
+    }
+
+    private string GetRuntimeVersionDisplay()
+    {
+        var version = GetAssemblyVersionCore();
+        var commit = GetDisplayedCommit();
+        return string.IsNullOrWhiteSpace(commit)
+            ? $"v{version}"
+            : $"v{version} · {commit}";
+    }
+
+    private string GetRuntimeVersionDetails()
+    {
+        var details = new List<string>
+        {
+            $"Version {GetAssemblyVersionCore()}"
+        };
+
+        var assemblyCommit = GetAssemblyCommit();
+        if (!string.IsNullOrWhiteSpace(assemblyCommit))
+        {
+            details.Add($"Build commit {assemblyCommit}");
+        }
+
+        var deployedCommit = GetDeployedCommit();
+        if (!string.IsNullOrWhiteSpace(deployedCommit))
+        {
+            details.Add($"Deployed ref {deployedCommit}");
+        }
+
+        return string.Join(" | ", details);
+    }
+
+    private string GetAssemblyVersionCore()
+    {
+        var informationalVersion = GetInformationalVersion();
+        if (!string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            return informationalVersion.Split('+', 2, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)[0];
+        }
+
+        return typeof(ConfigurationService).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
+    }
+
+    private string? GetDisplayedCommit()
+    {
+        var deployedCommit = GetDeployedCommit();
+        if (!string.IsNullOrWhiteSpace(deployedCommit))
+        {
+            return ShortenCommit(deployedCommit);
+        }
+
+        var assemblyCommit = GetAssemblyCommit();
+        return string.IsNullOrWhiteSpace(assemblyCommit)
+            ? null
+            : ShortenCommit(assemblyCommit);
+    }
+
+    private string? GetAssemblyCommit()
+    {
+        var informationalVersion = GetInformationalVersion();
+        if (string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            return null;
+        }
+
+        var separatorIndex = informationalVersion.IndexOf('+');
+        if (separatorIndex < 0 || separatorIndex == informationalVersion.Length - 1)
+        {
+            return null;
+        }
+
+        return informationalVersion[(separatorIndex + 1)..].Trim();
+    }
+
+    private static string? GetInformationalVersion()
+    {
+        return typeof(ConfigurationService).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion?
+            .Trim();
+    }
+
+    private static string ShortenCommit(string commit)
+    {
+        var trimmed = commit.Trim();
+        return trimmed.Length <= 8 ? trimmed : trimmed[..8];
+    }
+
+    private static string? GetDeployedCommit()
+    {
+        var configuredPath = Environment.GetEnvironmentVariable("HELGRIND_DEPLOYED_REF_FILE");
+        var candidatePaths = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            candidatePaths.Add(configuredPath);
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            candidatePaths.Add("/var/lib/helgrind/deployed-ref.txt");
+        }
+
+        foreach (var path in candidatePaths
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                var commit = File.ReadAllText(path).Trim();
+                if (!string.IsNullOrWhiteSpace(commit))
+                {
+                    return commit;
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return null;
     }
 
     private string GetAdminHttpsEndpointDisplay()
