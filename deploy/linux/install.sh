@@ -50,7 +50,7 @@ if [[ ! -f "$CONFIG_DIR/helgrind.env" ]]; then
   cp "$SOURCE_DIR/deploy/systemd/helgrind.env.example" "$CONFIG_DIR/helgrind.env"
 fi
 
-python3 - "$CONFIG_DIR/helgrind.env" "$STATE_DIR" "$PUBLIC_PORT" "$ADMIN_PORT" "$SOURCE_DIR" <<'PY'
+python3 - "$CONFIG_DIR/helgrind.env" "$STATE_DIR" "$PUBLIC_PORT" "$ADMIN_PORT" "$SOURCE_DIR" "$INSTALL_DIR" "$REPO_URL" "$REPO_REF" <<'PY'
 from pathlib import Path
 import sys
 
@@ -59,6 +59,9 @@ state_dir = sys.argv[2]
 public_port = sys.argv[3]
 admin_port = sys.argv[4]
 source_dir = sys.argv[5]
+install_dir = sys.argv[6]
+repo_url = sys.argv[7]
+repo_ref = sys.argv[8]
 
 lines = env_path.read_text(encoding="utf-8").splitlines()
 updates = {
@@ -66,6 +69,10 @@ updates = {
     "Helgrind__AdminHttpsPort": admin_port,
     "Helgrind__DatabasePath": f"{state_dir}/helgrind.db",
     "Helgrind__CertificateStoragePath": f"{state_dir}/certificates",
+  "HELGRIND_SOURCE_DIR": source_dir,
+  "HELGRIND_INSTALL_DIR": install_dir,
+  "HELGRIND_REPO_URL": repo_url,
+  "HELGRIND_REPO_REF": repo_ref,
     "Helgrind__SelfUpdateWorkingDirectory": source_dir,
 }
 
@@ -82,7 +89,7 @@ env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 PY
 
 cat > /etc/sudoers.d/helgrind-update <<SUDOERS
-helgrind ALL=(root) NOPASSWD: /bin/bash ${SOURCE_DIR}/deploy/linux/update.sh
+helgrind ALL=(root) NOPASSWD: /bin/bash ${INSTALL_DIR}/deploy/linux/update.sh
 SUDOERS
 chmod 440 /etc/sudoers.d/helgrind-update
 

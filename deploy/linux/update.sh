@@ -6,6 +6,7 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
+REPO_URL="${HELGRIND_REPO_URL:-https://github.com/Jeffe747/Helgrind.git}"
 REPO_REF="${HELGRIND_REPO_REF:-main}"
 SOURCE_DIR="${HELGRIND_SOURCE_DIR:-/opt/helgrind-src}"
 INSTALL_DIR="${HELGRIND_INSTALL_DIR:-/opt/helgrind}"
@@ -13,8 +14,8 @@ SERVICE_NAME="${HELGRIND_SERVICE_NAME:-helgrind}"
 PUBLISH_DIR="${HELGRIND_PUBLISH_DIR:-/tmp/helgrind-publish}"
 
 if [[ ! -d "$SOURCE_DIR/.git" ]]; then
-  echo "Helgrind source checkout not found at $SOURCE_DIR" >&2
-  exit 1
+  rm -rf "$SOURCE_DIR"
+  git clone --branch "$REPO_REF" --single-branch "$REPO_URL" "$SOURCE_DIR"
 fi
 
 git -C "$SOURCE_DIR" fetch --tags origin

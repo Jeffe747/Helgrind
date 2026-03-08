@@ -129,6 +129,8 @@ public sealed class SelfUpdateService(
     {
         var candidates = new List<string>();
 
+        candidates.Add(environment.ContentRootPath);
+
         var configuredWorkingDirectory = options.Value.SelfUpdateWorkingDirectory;
         if (!string.IsNullOrWhiteSpace(configuredWorkingDirectory))
         {

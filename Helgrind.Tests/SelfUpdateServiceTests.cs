@@ -54,6 +54,21 @@ public sealed class SelfUpdateServiceTests : IDisposable
     }
 
     [Fact]
+    public void IsConfigured_PrefersBundledPublishedScriptPath()
+    {
+        var scriptPath = Path.Combine(_contentRootPath, "deploy", "linux");
+        Directory.CreateDirectory(scriptPath);
+        File.WriteAllText(Path.Combine(scriptPath, "update.sh"), "#!/usr/bin/env bash\n");
+
+        var service = CreateService(new HelgrindOptions
+        {
+            SelfUpdateWorkingDirectory = "/path/that/does/not/exist"
+        }, environmentName: "Production");
+
+        Assert.True(service.IsConfigured);
+    }
+
+    [Fact]
     public void IsConfigured_ReturnsFalse_WhenNoCommandOrScriptExists()
     {
         var service = CreateService(new HelgrindOptions(), environmentName: "Production");
