@@ -41,7 +41,20 @@ public sealed class SelfUpdateServiceTests : IDisposable
     }
 
     [Fact]
-    public void IsConfigured_ReturnsFalse_WhenNoCommandExists()
+    public void IsConfigured_ReturnsTrue_InProduction_WhenDefaultLinuxScriptExists()
+    {
+        var scriptPath = Path.Combine(_contentRootPath, "deploy", "linux");
+        Directory.CreateDirectory(scriptPath);
+        File.WriteAllText(Path.Combine(scriptPath, "update.sh"), "#!/usr/bin/env bash\n");
+
+        var service = CreateService(new HelgrindOptions(), environmentName: "Production");
+
+        Assert.True(service.IsConfigured);
+        Assert.Contains("default Ubuntu update script", service.GetStatusMessage(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void IsConfigured_ReturnsFalse_WhenNoCommandOrScriptExists()
     {
         var service = CreateService(new HelgrindOptions(), environmentName: "Production");
 

@@ -106,7 +106,8 @@ Exports include certificate metadata only, not the raw PEM or key.
 - Proxy config is stored in SQLite and translated into YARP runtime config in memory.
 - The dashboard and API are only served from the admin listener.
 - The update button is hidden in Development.
-- In Production, the update button is only enabled when `Helgrind:SelfUpdateCommand` is configured. The included Ubuntu deployment uses `sudo /bin/bash /opt/helgrind-src/deploy/linux/update.sh`.
+- In Production, the update button works automatically when the standard Ubuntu source checkout exists at `/opt/helgrind-src` and contains `deploy/linux/update.sh`.
+- `Helgrind:SelfUpdateCommand` is still available as an override if you want a custom update flow.
 
 ## Restart Helpers
 

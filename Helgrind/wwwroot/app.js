@@ -11,7 +11,6 @@ const elements = {
     dashboardStatus: document.getElementById("dashboard-status"),
     dashboardStatusLabel: document.getElementById("dashboard-status-label"),
     triggerUpdate: document.getElementById("trigger-update"),
-    densityToggle: document.getElementById("toggle-density"),
     editorTitle: document.getElementById("editor-title"),
     emptyState: document.getElementById("empty-state"),
     routeEditor: document.getElementById("route-editor"),
@@ -97,7 +96,6 @@ document.getElementById("export-config").addEventListener("click", exportConfigu
 document.getElementById("import-config").addEventListener("click", () => document.getElementById("import-file").click());
 document.getElementById("import-file").addEventListener("change", importConfiguration);
 elements.triggerUpdate.addEventListener("click", triggerSelfUpdate);
-elements.densityToggle.addEventListener("click", toggleDensityMode);
 document.getElementById("add-destination").addEventListener("click", () => {
     const cluster = getSelectedCluster();
     if (!cluster) {
@@ -284,7 +282,6 @@ function bindClusterEditor() {
 }
 
 function render() {
-    renderDensityMode();
     renderHeaderState();
     renderFilterState();
     renderListsOnly();
@@ -474,12 +471,6 @@ function renderFilterState() {
     elements.clusterFilterHealth.checked = state.ui.clusterFilters.healthEnabledOnly;
 }
 
-function renderDensityMode() {
-    document.body.dataset.density = state.ui.density;
-    elements.densityToggle.classList.toggle("active", state.ui.density === "dense");
-    elements.densityToggle.textContent = state.ui.density === "dense" ? "Ops Mode: Dense" : "Ops Mode";
-}
-
 function selectItem(type, id) {
     state.selected = { type, id };
 }
@@ -552,12 +543,6 @@ function bindFilters() {
         persistUiState();
         renderListsOnly();
     });
-}
-
-function toggleDensityMode() {
-    state.ui.density = state.ui.density === "dense" ? "comfortable" : "dense";
-    persistUiState();
-    renderDensityMode();
 }
 
 function getFilteredRoutes() {
@@ -638,7 +623,6 @@ function loadUiState() {
     try {
         const stored = JSON.parse(localStorage.getItem("helgrind-ui") || "null");
         return {
-            density: stored?.density === "dense" ? "dense" : "comfortable",
             routeFilters: {
                 expanded: !!stored?.routeFilters?.expanded,
                 search: stored?.routeFilters?.search || "",
@@ -654,7 +638,6 @@ function loadUiState() {
         };
     } catch {
         return {
-            density: "comfortable",
             routeFilters: { expanded: false, search: "", selectedClusterOnly: false, hostsOnly: false },
             clusterFilters: { expanded: false, search: "", referencedOnly: false, healthEnabledOnly: false },
         };

@@ -66,7 +66,6 @@ updates = {
     "Helgrind__AdminHttpsPort": admin_port,
     "Helgrind__DatabasePath": f"{state_dir}/helgrind.db",
     "Helgrind__CertificateStoragePath": f"{state_dir}/certificates",
-    "Helgrind__SelfUpdateCommand": f"sudo /bin/bash {source_dir}/deploy/linux/update.sh",
     "Helgrind__SelfUpdateWorkingDirectory": source_dir,
 }
 

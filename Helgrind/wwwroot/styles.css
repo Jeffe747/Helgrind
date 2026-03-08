@@ -532,68 +532,6 @@ textarea {
 
 .hidden { display: none !important; }
 
-body[data-density="dense"] {
-    --log-font-size: 11px;
-}
-
-body[data-density="dense"] .status-strip,
-body[data-density="dense"] .restart-banner,
-body[data-density="dense"] .topbar,
-body[data-density="dense"] .header {
-    padding-top: 10px;
-    padding-bottom: 10px;
-}
-
-body[data-density="dense"] .layout,
-body[data-density="dense"] .workspace {
-    grid-template-columns: 248px 248px 1fr;
-}
-
-body[data-density="dense"] .column-header,
-body[data-density="dense"] .destinations-header,
-body[data-density="dense"] .pane-tools,
-body[data-density="dense"] .filter-panel {
-    padding-top: 8px;
-    padding-bottom: 8px;
-}
-
-body[data-density="dense"] .item-card {
-    padding: 8px 12px;
-}
-
-body[data-density="dense"] .item-main {
-    gap: 4px;
-}
-
-body[data-density="dense"] .item-main strong,
-body[data-density="dense"] .count,
-body[data-density="dense"] button,
-body[data-density="dense"] .header-button,
-body[data-density="dense"] .button-link {
-    font-size: 11px;
-}
-
-body[data-density="dense"] .item-main span,
-body[data-density="dense"] .item-meta,
-body[data-density="dense"] .pane-summary,
-body[data-density="dense"] .status,
-body[data-density="dense"] .header-selection,
-body[data-density="dense"] input,
-body[data-density="dense"] textarea,
-body[data-density="dense"] select,
-body[data-density="dense"] .list-empty {
-    font-size: 11px;
-}
-
-body[data-density="dense"] .editor,
-body[data-density="dense"] .certificate-card,
-body[data-density="dense"] .health-item,
-body[data-density="dense"] .empty-state,
-body[data-density="dense"] .empty {
-    margin: 12px;
-    padding: 12px;
-}
-
 ::-webkit-scrollbar {
     width: 12px;
     height: 12px;

@@ -21,7 +21,7 @@ public sealed class SelfUpdateService(
         return command is null
             ? environment.IsDevelopment()
                 ? "Self-update is disabled in Development. Stop the app from Visual Studio or your local runner and redeploy manually."
-                : "Self-update is disabled. Configure Helgrind:SelfUpdateCommand for your production deployment flow."
+                : "Self-update is disabled. Helgrind could not find a production update command or the standard Linux update script."
             : $"Runs {command.Description}.";
     }
 
@@ -86,11 +86,19 @@ public sealed class SelfUpdateService(
             return null;
         }
 
-        return string.IsNullOrWhiteSpace(options.Value.SelfUpdateCommand)
-            ? null
-            : new ResolvedUpdateCommand(
+        if (!string.IsNullOrWhiteSpace(options.Value.SelfUpdateCommand))
+        {
+            return new ResolvedUpdateCommand(
                 CreateShellStartInfo(options.Value.SelfUpdateCommand!, ResolveWorkingDirectory()),
                 "configured production self-update command");
+        }
+
+        var defaultScriptPath = ResolveDefaultProductionScriptPath();
+        return defaultScriptPath is null
+            ? null
+            : new ResolvedUpdateCommand(
+                CreateShellStartInfo($"sudo /bin/bash {QuoteForShell(defaultScriptPath)}", ResolveWorkingDirectory()),
+                "default Ubuntu update script");
     }
 
     private string ResolveWorkingDirectory()
@@ -117,6 +125,41 @@ public sealed class SelfUpdateService(
         return environment.ContentRootPath;
     }
 
+    private string? ResolveDefaultProductionScriptPath()
+    {
+        var candidates = new List<string>();
+
+        var configuredWorkingDirectory = options.Value.SelfUpdateWorkingDirectory;
+        if (!string.IsNullOrWhiteSpace(configuredWorkingDirectory))
+        {
+            candidates.Add(Path.IsPathRooted(configuredWorkingDirectory)
+                ? configuredWorkingDirectory
+                : Path.GetFullPath(Path.Combine(environment.ContentRootPath, configuredWorkingDirectory)));
+        }
+
+        var sourceDirectoryFromEnvironment = Environment.GetEnvironmentVariable("HELGRIND_SOURCE_DIR");
+        if (!string.IsNullOrWhiteSpace(sourceDirectoryFromEnvironment))
+        {
+            candidates.Add(sourceDirectoryFromEnvironment);
+        }
+
+        candidates.Add("/opt/helgrind-src");
+        candidates.Add(ResolveRepositoryRoot());
+
+        foreach (var directory in candidates
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var candidate = Path.Combine(directory, "deploy", "linux", "update.sh");
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
     private ProcessStartInfo CreateShellStartInfo(string command, string workingDirectory)
     {
         var startInfo = OperatingSystem.IsWindows()
@@ -136,6 +179,13 @@ public sealed class SelfUpdateService(
         startInfo.CreateNoWindow = true;
         ApplyEnvironment(startInfo);
         return startInfo;
+    }
+
+    private static string QuoteForShell(string value)
+    {
+        return OperatingSystem.IsWindows()
+            ? value
+            : $"'{value.Replace("'", "'\\''")}'";
     }
 
     private void ApplyEnvironment(ProcessStartInfo startInfo)
