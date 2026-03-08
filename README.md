@@ -26,9 +26,19 @@ Install script:
 Update script:
 
 - pulls the latest code
+- hard-resets the dedicated source checkout to the configured remote branch tip
+- removes stray files from the dedicated source checkout before publishing
 - republishes the app
 - replaces files in `/opt/helgrind`
-- restarts `helgrind.service`
+- ensures `/etc/systemd/system/helgrind.service` and `/etc/helgrind/helgrind.env` exist
+- enables and starts `helgrind.service`
+- writes `/var/lib/helgrind/update.log` and `/var/lib/helgrind/deployed-ref.txt`
+
+Remove the installation:
+
+```bash
+sudo /bin/bash /opt/helgrind-src/deploy/linux/uninstall.sh
+```
 
 Example install command:
 
@@ -108,6 +118,7 @@ Exports include certificate metadata only, not the raw PEM or key.
 - The update button is hidden in Development.
 - In Production, the update button works automatically when the standard Ubuntu source checkout exists at `/opt/helgrind-src` and contains `deploy/linux/update.sh`.
 - `Helgrind:SelfUpdateCommand` is still available as an override if you want a custom update flow.
+- The update button deploys the configured remote branch, typically `origin/main`. It does not deploy unpushed local workspace changes.
 
 ## Telemetry
 

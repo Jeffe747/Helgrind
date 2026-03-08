@@ -15,6 +15,8 @@ CONFIG_DIR="${HELGRIND_CONFIG_DIR:-/etc/helgrind}"
 SERVICE_NAME="${HELGRIND_SERVICE_NAME:-helgrind}"
 PUBLIC_PORT="${HELGRIND_PUBLIC_PORT:-443}"
 ADMIN_PORT="${HELGRIND_ADMIN_PORT:-8444}"
+UPDATE_LOG_PATH="${HELGRIND_UPDATE_LOG:-${STATE_DIR}/update.log}"
+DEPLOYED_REF_PATH="${HELGRIND_DEPLOYED_REF_FILE:-${STATE_DIR}/deployed-ref.txt}"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -69,10 +71,10 @@ updates = {
     "Helgrind__AdminHttpsPort": admin_port,
     "Helgrind__DatabasePath": f"{state_dir}/helgrind.db",
     "Helgrind__CertificateStoragePath": f"{state_dir}/certificates",
-  "HELGRIND_SOURCE_DIR": source_dir,
-  "HELGRIND_INSTALL_DIR": install_dir,
-  "HELGRIND_REPO_URL": repo_url,
-  "HELGRIND_REPO_REF": repo_ref,
+    "HELGRIND_SOURCE_DIR": source_dir,
+    "HELGRIND_INSTALL_DIR": install_dir,
+    "HELGRIND_REPO_URL": repo_url,
+    "HELGRIND_REPO_REF": repo_ref,
     "Helgrind__SelfUpdateWorkingDirectory": source_dir,
 }
 
@@ -96,12 +98,12 @@ chmod 440 /etc/sudoers.d/helgrind-update
 chown -R root:root "$SOURCE_DIR" "$INSTALL_DIR"
 chown -R helgrind:helgrind "$STATE_DIR" "$CONFIG_DIR"
 chmod 640 "$CONFIG_DIR/helgrind.env"
+touch "$UPDATE_LOG_PATH" "$DEPLOYED_REF_PATH"
+chown helgrind:helgrind "$UPDATE_LOG_PATH" "$DEPLOYED_REF_PATH"
 
 bash "$SOURCE_DIR/deploy/linux/update.sh"
-
-systemctl daemon-reload
-systemctl enable --now "${SERVICE_NAME}.service"
 
 echo "Helgrind installed."
 echo "Public listener: https://<server>:${PUBLIC_PORT}"
 echo "Admin listener: https://<server>:${ADMIN_PORT}"
+echo "To remove Helgrind later, run: sudo /bin/bash ${SOURCE_DIR}/deploy/linux/uninstall.sh"
