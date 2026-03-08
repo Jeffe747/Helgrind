@@ -60,10 +60,17 @@
         </nav>
 
         <div class="toast-region" aria-live="polite" aria-atomic="true">
-            <button id="status-toast" class="status-toast hidden" type="button" aria-label="Dismiss status message">
-                <span id="status-toast-message"></span>
-                <span class="toast-dismiss">Click to dismiss</span>
-            </button>
+            <div id="status-toast" class="status-toast hidden" role="status" data-tone="info">
+                <span class="status-toast-icon" aria-hidden="true"></span>
+                <div class="status-toast-content">
+                    <div class="status-toast-heading">
+                        <strong id="status-toast-title" class="status-toast-title">Status Update</strong>
+                        <span id="status-toast-hint" class="toast-dismiss">Dismisses automatically unless you hover it.</span>
+                    </div>
+                    <p id="status-toast-message" class="status-toast-message"></p>
+                </div>
+                <button id="status-toast-close" class="status-toast-close" type="button" aria-label="Dismiss status message">Close</button>
+            </div>
         </div>
 
         <section id="dashboard-view" class="view-panel active">

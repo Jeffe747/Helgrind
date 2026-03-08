@@ -37,7 +37,10 @@ const elements = {
     destinationList: document.getElementById("destination-list"),
     template: document.getElementById("destination-row-template"),
     statusToast: document.getElementById("status-toast"),
+    statusToastTitle: document.getElementById("status-toast-title"),
     statusToastMessage: document.getElementById("status-toast-message"),
+    statusToastHint: document.getElementById("status-toast-hint"),
+    statusToastClose: document.getElementById("status-toast-close"),
     publicHttpsEndpoint: document.getElementById("public-https-endpoint"),
     environmentName: document.getElementById("environment-name"),
     certificateState: document.getElementById("certificate-state"),
@@ -190,7 +193,14 @@ document.getElementById("certificate-form").addEventListener("submit", uploadCer
 document.getElementById("route-editor").addEventListener("submit", event => saveSelectedConfiguration(event, "route"));
 document.getElementById("cluster-editor").addEventListener("submit", event => saveSelectedConfiguration(event, "cluster"));
 elements.statusToast.addEventListener("mouseenter", pinStatusToast);
-elements.statusToast.addEventListener("click", hideStatusToast);
+elements.statusToast.addEventListener("mouseleave", resumeStatusToast);
+elements.statusToast.addEventListener("focusin", pinStatusToast);
+elements.statusToast.addEventListener("focusout", event => {
+    if (!elements.statusToast.contains(event.relatedTarget)) {
+        resumeStatusToast();
+    }
+});
+elements.statusToastClose.addEventListener("click", hideStatusToast);
 
 bindRouteEditor();
 bindClusterEditor();
@@ -916,16 +926,16 @@ function setStatus(message) {
         return;
     }
 
+    const presentation = describeStatusToast(message);
     clearStatusToastTimer();
     statusToastPinned = false;
+    elements.statusToast.dataset.tone = presentation.tone;
+    elements.statusToastTitle.textContent = presentation.title;
     elements.statusToastMessage.textContent = message;
+    elements.statusToastHint.textContent = "Dismisses automatically unless you hover it.";
     elements.statusToast.classList.remove("hidden", "pinned");
     elements.statusToast.classList.add("visible");
-    statusToastTimer = window.setTimeout(() => {
-        if (!statusToastPinned) {
-            hideStatusToast();
-        }
-    }, 2000);
+    scheduleStatusToastHide(getStatusToastDuration(message));
 }
 
 function pinStatusToast() {
@@ -935,7 +945,19 @@ function pinStatusToast() {
 
     statusToastPinned = true;
     clearStatusToastTimer();
+    elements.statusToastHint.textContent = "Pinned while hovered or focused. Use Close to dismiss.";
     elements.statusToast.classList.add("pinned");
+}
+
+function resumeStatusToast() {
+    if (elements.statusToast.classList.contains("hidden") || !statusToastPinned) {
+        return;
+    }
+
+    statusToastPinned = false;
+    elements.statusToast.classList.remove("pinned");
+    elements.statusToastHint.textContent = "Dismisses automatically unless you hover it.";
+    scheduleStatusToastHide(1600);
 }
 
 function hideStatusToast() {
@@ -943,7 +965,10 @@ function hideStatusToast() {
     statusToastPinned = false;
     elements.statusToast.classList.remove("visible", "pinned");
     elements.statusToast.classList.add("hidden");
+    elements.statusToast.dataset.tone = "info";
+    elements.statusToastTitle.textContent = "Status Update";
     elements.statusToastMessage.textContent = "";
+    elements.statusToastHint.textContent = "Dismisses automatically unless you hover it.";
 }
 
 function clearStatusToastTimer() {
@@ -951,6 +976,36 @@ function clearStatusToastTimer() {
         window.clearTimeout(statusToastTimer);
         statusToastTimer = null;
     }
+}
+
+function scheduleStatusToastHide(duration) {
+    statusToastTimer = window.setTimeout(() => {
+        if (!statusToastPinned) {
+            hideStatusToast();
+        }
+    }, duration);
+}
+
+function getStatusToastDuration(message) {
+    return Math.max(3200, Math.min(8200, 2600 + (message.length * 22)));
+}
+
+function describeStatusToast(message) {
+    const normalized = message.toLowerCase();
+
+    if (normalized.includes("could not") || normalized.includes("not configured") || normalized.includes("choose both")) {
+        return { title: "Action Needs Attention", tone: "error" };
+    }
+
+    if (normalized.includes("validation") || normalized.includes("warning") || normalized.includes("restart") || normalized.includes("may reject")) {
+        return { title: "Completed With Notes", tone: "warning" };
+    }
+
+    if (normalized.includes("saved") || normalized.includes("uploaded") || normalized.includes("exported") || normalized.includes("imported") || normalized.includes("started the update command") || normalized.includes("sent")) {
+        return { title: "Action Completed", tone: "success" };
+    }
+
+    return { title: "Status Update", tone: "info" };
 }
 
 function bindFilters() {
