@@ -21,6 +21,8 @@ SERVICE_GROUP="${HELGRIND_SERVICE_GROUP:-helgrind}"
 PUBLIC_PORT="${HELGRIND_PUBLIC_PORT:-443}"
 ADMIN_PORT="${HELGRIND_ADMIN_PORT:-8444}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
+SERVICE_SOURCE_PATH="${SOURCE_DIR}/deploy/systemd/helgrind.service"
+ENV_SOURCE_PATH="${SOURCE_DIR}/deploy/systemd/helgrind.env.example"
 SUDOERS_PATH="/etc/sudoers.d/helgrind-update"
 
 mkdir -p "$SOURCE_DIR" "$INSTALL_DIR" "$STATE_DIR" "$CONFIG_DIR"
@@ -66,11 +68,21 @@ dotnet publish "$SOURCE_DIR/Helgrind/Helgrind.csproj" -c Release -o "$PUBLISH_DI
 mkdir -p "$INSTALL_DIR"
 rsync -a --delete "$PUBLISH_DIR/" "$INSTALL_DIR/"
 
+if [[ ! -f "$SERVICE_SOURCE_PATH" ]]; then
+  echo "Expected systemd unit template was not found at: $SERVICE_SOURCE_PATH" >&2
+  exit 1
+fi
+
 install -d -m 0755 /etc/systemd/system
-cp "$SOURCE_DIR/deploy/systemd/helgrind.service" "$SERVICE_PATH"
+install -m 0644 "$SERVICE_SOURCE_PATH" "$SERVICE_PATH"
 
 if [[ ! -f "$CONFIG_DIR/helgrind.env" ]]; then
-  cp "$SOURCE_DIR/deploy/systemd/helgrind.env.example" "$CONFIG_DIR/helgrind.env"
+  if [[ ! -f "$ENV_SOURCE_PATH" ]]; then
+    echo "Expected environment template was not found at: $ENV_SOURCE_PATH" >&2
+    exit 1
+  fi
+
+  install -m 0640 "$ENV_SOURCE_PATH" "$CONFIG_DIR/helgrind.env"
 fi
 
 python3 - "$CONFIG_DIR/helgrind.env" "$STATE_DIR" "$PUBLIC_PORT" "$ADMIN_PORT" "$SOURCE_DIR" "$INSTALL_DIR" "$REPO_URL" "$REPO_REF" <<'PY'
@@ -126,12 +138,28 @@ chmod 640 "$CONFIG_DIR/helgrind.env"
 touch "$UPDATE_LOG_PATH" "$DEPLOYED_REF_PATH"
 chown "$SERVICE_USER:$SERVICE_GROUP" "$UPDATE_LOG_PATH" "$DEPLOYED_REF_PATH"
 
+printf '%s\n' "$DEPLOYED_COMMIT" > "$DEPLOYED_REF_PATH"
+
+echo "Systemd unit installed at: $SERVICE_PATH"
+echo "Recorded deployed commit in: $DEPLOYED_REF_PATH"
+
 systemctl daemon-reload
-systemctl enable --now "${SERVICE_NAME}.service"
+
+if systemctl list-unit-files "${SERVICE_NAME}.service" --no-legend 2>/dev/null | grep -q "^${SERVICE_NAME}\.service"; then
+  systemctl enable "${SERVICE_NAME}.service"
+else
+  echo "Systemd did not list ${SERVICE_NAME}.service after daemon-reload; enabling via explicit path." >&2
+  systemctl enable "$SERVICE_PATH"
+  systemctl daemon-reload
+fi
+
+if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+  systemctl restart "${SERVICE_NAME}.service"
+else
+  systemctl start "${SERVICE_NAME}.service"
+fi
 
 rm -rf "$PUBLISH_DIR"
-
-printf '%s\n' "$DEPLOYED_COMMIT" > "$DEPLOYED_REF_PATH"
 
 echo "Update log written to: $UPDATE_LOG_PATH"
 echo "Deployed commit recorded in: $DEPLOYED_REF_PATH"
