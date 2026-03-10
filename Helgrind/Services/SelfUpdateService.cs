@@ -5,197 +5,108 @@ using Microsoft.Extensions.Options;
 
 namespace Helgrind.Services;
 
+public interface ISelfUpdateService
+{
+    string ButtonLabel { get; }
+    bool IsConfigured { get; }
+    string GetStatusMessage();
+    Task<SelfUpdateResultDto> TriggerUpdateAsync(CancellationToken cancellationToken);
+}
+
 public sealed class SelfUpdateService(
     IOptions<HelgrindOptions> options,
     IWebHostEnvironment environment,
-    IHostApplicationLifetime applicationLifetime,
-    ILogger<SelfUpdateService> logger)
+    ILogger<SelfUpdateService> logger) : ISelfUpdateService
 {
     public string ButtonLabel => "Update Helgrind";
 
-    public bool IsConfigured => ResolveCommand() is not null;
+    public bool IsConfigured => !environment.IsDevelopment() && File.Exists(ScriptPath);
+
+    private string ScriptPath => Path.Combine(environment.ContentRootPath, "update.sh");
 
     public string GetStatusMessage()
     {
-        var command = ResolveCommand();
-        return command is null
-            ? environment.IsDevelopment()
-                ? "Self-update is disabled in Development. Stop the app from Visual Studio or your local runner and redeploy manually."
-                : "Self-update is disabled. Helgrind could not find a production update command or the standard Linux update script."
-            : $"Runs {command.Description}.";
+        if (environment.IsDevelopment())
+        {
+            return "Self-update is disabled in Development. Stop the app from Visual Studio or your local runner and redeploy manually.";
+        }
+
+        var scriptPath = ScriptPath;
+        if (!File.Exists(scriptPath))
+        {
+            return $"Self-update is not available. Expected update.sh at {scriptPath}.";
+        }
+
+        return $"Runs {scriptPath} to pull from {options.Value.SelfUpdateBranch} and restart the Helgrind service.";
     }
 
-    public Task<SelfUpdateResultDto> TriggerUpdateAsync(CancellationToken cancellationToken)
+    public async Task<SelfUpdateResultDto> TriggerUpdateAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var command = ResolveCommand();
-        if (command is null)
+        if (!IsConfigured)
         {
-            return Task.FromResult(new SelfUpdateResultDto
+            return new SelfUpdateResultDto
             {
                 Success = false,
                 Accepted = false,
                 StatusMessage = "Self-update is not configured for this Helgrind instance."
-            });
+            };
         }
 
-        try
+        var scriptPath = ScriptPath;
+        var logPath = options.Value.SelfUpdateLogPath;
+        var repoUrl = EscapeSingleQuoted(options.Value.SelfUpdateRepoUrl);
+        var branch = EscapeSingleQuoted(options.Value.SelfUpdateBranch);
+        var command = $"nohup '{EscapeSingleQuoted(scriptPath)}' --repo-url '{repoUrl}' --branch '{branch}' > '{EscapeSingleQuoted(logPath)}' 2>&1 &";
+
+        using var process = new Process
         {
-            var process = Process.Start(command.StartInfo);
-            if (process is null)
+            StartInfo = new ProcessStartInfo
             {
-                return Task.FromResult(new SelfUpdateResultDto
-                {
-                    Success = false,
-                    Accepted = false,
-                    StatusMessage = "Failed to launch the Helgrind update command."
-                });
+                FileName = "/bin/bash",
+                Arguments = $"-lc \"{command}\"",
+                WorkingDirectory = "/",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
             }
+        };
 
-            logger.LogInformation("Started Helgrind self-update command using {Description}.", command.Description);
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(TimeSpan.FromSeconds(1.5));
-                applicationLifetime.StopApplication();
-            });
+        process.StartInfo.Environment["HELGRIND_PID"] = Environment.ProcessId.ToString();
+        process.StartInfo.Environment["HELGRIND_CONTENT_ROOT"] = environment.ContentRootPath;
 
-            return Task.FromResult(new SelfUpdateResultDto
-            {
-                Success = true,
-                Accepted = true,
-                StatusMessage = "Helgrind started the update command. The admin UI will disconnect while the process restarts."
-            });
-        }
-        catch (Exception exception)
+        process.Start();
+        var stdOutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stdErrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+        var standardError = await stdErrTask;
+        _ = await stdOutTask;
+
+        if (process.ExitCode != 0)
         {
-            logger.LogError(exception, "Failed to launch Helgrind self-update command.");
-            return Task.FromResult(new SelfUpdateResultDto
+            var errorMessage = $"Failed to start the updater script: {standardError}".Trim();
+            logger.LogError("Helgrind self-update failed to launch: {Error}", standardError);
+            return new SelfUpdateResultDto
             {
                 Success = false,
                 Accepted = false,
-                StatusMessage = $"Could not launch the update command: {exception.Message}"
-            });
-        }
-    }
-
-    private ResolvedUpdateCommand? ResolveCommand()
-    {
-        if (environment.IsDevelopment())
-        {
-            return null;
-        }
-
-        if (!string.IsNullOrWhiteSpace(options.Value.SelfUpdateCommand))
-        {
-            return new ResolvedUpdateCommand(
-                CreateShellStartInfo(options.Value.SelfUpdateCommand!, ResolveWorkingDirectory()),
-                "configured production self-update command");
-        }
-
-        var defaultScriptPath = ResolveDefaultProductionScriptPath();
-        return defaultScriptPath is null
-            ? null
-            : new ResolvedUpdateCommand(
-                CreateShellStartInfo($"sudo /bin/bash {QuoteForShell(defaultScriptPath)}", ResolveWorkingDirectory()),
-                "default Ubuntu update script");
-    }
-
-    private string ResolveWorkingDirectory()
-    {
-        var configuredPath = options.Value.SelfUpdateWorkingDirectory;
-        if (!string.IsNullOrWhiteSpace(configuredPath))
-        {
-            return Path.IsPathRooted(configuredPath)
-                ? configuredPath
-                : Path.GetFullPath(Path.Combine(environment.ContentRootPath, configuredPath));
-        }
-
-        return ResolveRepositoryRoot();
-    }
-
-    private string ResolveRepositoryRoot()
-    {
-        var parent = Directory.GetParent(environment.ContentRootPath);
-        if (parent is not null && File.Exists(Path.Combine(parent.FullName, "Helgrind.slnx")))
-        {
-            return parent.FullName;
-        }
-
-        return environment.ContentRootPath;
-    }
-
-    private string? ResolveDefaultProductionScriptPath()
-    {
-        var candidates = new List<string>();
-
-        candidates.Add(environment.ContentRootPath);
-
-        var configuredWorkingDirectory = options.Value.SelfUpdateWorkingDirectory;
-        if (!string.IsNullOrWhiteSpace(configuredWorkingDirectory))
-        {
-            candidates.Add(Path.IsPathRooted(configuredWorkingDirectory)
-                ? configuredWorkingDirectory
-                : Path.GetFullPath(Path.Combine(environment.ContentRootPath, configuredWorkingDirectory)));
-        }
-
-        var sourceDirectoryFromEnvironment = Environment.GetEnvironmentVariable("HELGRIND_SOURCE_DIR");
-        if (!string.IsNullOrWhiteSpace(sourceDirectoryFromEnvironment))
-        {
-            candidates.Add(sourceDirectoryFromEnvironment);
-        }
-
-        candidates.Add("/opt/helgrind-src");
-        candidates.Add(ResolveRepositoryRoot());
-
-        foreach (var directory in candidates
-            .Where(static path => !string.IsNullOrWhiteSpace(path))
-            .Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var candidate = Path.Combine(directory, "deploy", "linux", "update.sh");
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private ProcessStartInfo CreateShellStartInfo(string command, string workingDirectory)
-    {
-        var startInfo = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo
-            {
-                FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
-                Arguments = $"/c {command}",
-            }
-            : new ProcessStartInfo
-            {
-                FileName = "/bin/bash",
-                Arguments = $"-lc \"{command.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"",
+                StatusMessage = errorMessage
             };
+        }
 
-        startInfo.WorkingDirectory = workingDirectory;
-        startInfo.UseShellExecute = false;
-        startInfo.CreateNoWindow = true;
-        ApplyEnvironment(startInfo);
-        return startInfo;
+        logger.LogInformation("Helgrind self-update handed off to {ScriptPath}. Log: {LogPath}", scriptPath, logPath);
+        return new SelfUpdateResultDto
+        {
+            Success = true,
+            Accepted = true,
+            StatusMessage = "Self-update handoff completed. Helgrind will restart if the updater succeeds."
+        };
     }
 
-    private static string QuoteForShell(string value)
+    private static string EscapeSingleQuoted(string value)
     {
-        return OperatingSystem.IsWindows()
-            ? value
-            : $"'{value.Replace("'", "'\\''")}'";
+        return value.Replace("'", "'\\''", StringComparison.Ordinal);
     }
-
-    private void ApplyEnvironment(ProcessStartInfo startInfo)
-    {
-        startInfo.Environment["HELGRIND_PID"] = Environment.ProcessId.ToString();
-        startInfo.Environment["HELGRIND_CONTENT_ROOT"] = environment.ContentRootPath;
-        startInfo.Environment["HELGRIND_REPO_ROOT"] = ResolveRepositoryRoot();
-    }
-
-    private sealed record ResolvedUpdateCommand(ProcessStartInfo StartInfo, string Description);
 }

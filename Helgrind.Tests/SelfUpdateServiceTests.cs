@@ -2,7 +2,6 @@ using Helgrind.Options;
 using Helgrind.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Helgrind.Tests;
@@ -17,63 +16,45 @@ public sealed class SelfUpdateServiceTests : IDisposable
     }
 
     [Fact]
-    public void IsConfigured_ReturnsFalse_InDevelopment_EvenWhenCommandExists()
+    public void IsConfigured_ReturnsFalse_InDevelopment_EvenWhenScriptExists()
     {
-        var service = CreateService(new HelgrindOptions
-        {
-            SelfUpdateCommand = "echo updating"
-        }, environmentName: "Development");
+        File.WriteAllText(Path.Combine(_contentRootPath, "update.sh"), "#!/usr/bin/env bash\n");
+
+        var service = CreateService(new HelgrindOptions(), environmentName: "Development");
 
         Assert.False(service.IsConfigured);
         Assert.Contains("disabled in Development", service.GetStatusMessage(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void IsConfigured_ReturnsTrue_InProduction_WhenConfiguredCommandExists()
-    {
-        var service = CreateService(new HelgrindOptions
-        {
-            SelfUpdateCommand = "echo updating"
-        }, environmentName: "Production");
-
-        Assert.True(service.IsConfigured);
-        Assert.Contains("configured production self-update command", service.GetStatusMessage(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void IsConfigured_ReturnsTrue_InProduction_WhenDefaultLinuxScriptExists()
-    {
-        var scriptPath = Path.Combine(_contentRootPath, "deploy", "linux");
-        Directory.CreateDirectory(scriptPath);
-        File.WriteAllText(Path.Combine(scriptPath, "update.sh"), "#!/usr/bin/env bash\n");
-
-        var service = CreateService(new HelgrindOptions(), environmentName: "Production");
-
-        Assert.True(service.IsConfigured);
-        Assert.Contains("default Ubuntu update script", service.GetStatusMessage(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void IsConfigured_PrefersBundledPublishedScriptPath()
-    {
-        var scriptPath = Path.Combine(_contentRootPath, "deploy", "linux");
-        Directory.CreateDirectory(scriptPath);
-        File.WriteAllText(Path.Combine(scriptPath, "update.sh"), "#!/usr/bin/env bash\n");
-
-        var service = CreateService(new HelgrindOptions
-        {
-            SelfUpdateWorkingDirectory = "/path/that/does/not/exist"
-        }, environmentName: "Production");
-
-        Assert.True(service.IsConfigured);
-    }
-
-    [Fact]
-    public void IsConfigured_ReturnsFalse_WhenNoCommandOrScriptExists()
+    public void IsConfigured_ReturnsFalse_InProduction_WhenScriptDoesNotExist()
     {
         var service = CreateService(new HelgrindOptions(), environmentName: "Production");
 
         Assert.False(service.IsConfigured);
+        Assert.Contains("update.sh", service.GetStatusMessage(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void IsConfigured_ReturnsTrue_InProduction_WhenScriptExists()
+    {
+        File.WriteAllText(Path.Combine(_contentRootPath, "update.sh"), "#!/usr/bin/env bash\n");
+
+        var service = CreateService(new HelgrindOptions(), environmentName: "Production");
+
+        Assert.True(service.IsConfigured);
+    }
+
+    [Fact]
+    public void GetStatusMessage_DescribesScriptAndBranch_WhenConfigured()
+    {
+        File.WriteAllText(Path.Combine(_contentRootPath, "update.sh"), "#!/usr/bin/env bash\n");
+
+        var service = CreateService(new HelgrindOptions { SelfUpdateBranch = "master" }, environmentName: "Production");
+
+        var message = service.GetStatusMessage();
+        Assert.Contains("update.sh", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("master", message, StringComparison.OrdinalIgnoreCase);
     }
 
     public void Dispose()
@@ -90,7 +71,7 @@ public sealed class SelfUpdateServiceTests : IDisposable
         {
             EnvironmentName = environmentName
         };
-        return new SelfUpdateService(Microsoft.Extensions.Options.Options.Create(options), environment, new TestHostApplicationLifetime(), NullLogger<SelfUpdateService>.Instance);
+        return new SelfUpdateService(Microsoft.Extensions.Options.Options.Create(options), environment, NullLogger<SelfUpdateService>.Instance);
     }
 
     private sealed class TestWebHostEnvironment(string contentRootPath) : IWebHostEnvironment
@@ -106,18 +87,5 @@ public sealed class SelfUpdateServiceTests : IDisposable
         public string ContentRootPath { get; set; } = contentRootPath;
 
         public IFileProvider ContentRootFileProvider { get; set; } = new PhysicalFileProvider(contentRootPath);
-    }
-
-    private sealed class TestHostApplicationLifetime : IHostApplicationLifetime
-    {
-        public CancellationToken ApplicationStarted => CancellationToken.None;
-
-        public CancellationToken ApplicationStopping => CancellationToken.None;
-
-        public CancellationToken ApplicationStopped => CancellationToken.None;
-
-        public void StopApplication()
-        {
-        }
     }
 }

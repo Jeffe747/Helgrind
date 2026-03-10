@@ -29,9 +29,11 @@ public sealed class HelgrindOptions
 
     public string CertificateStoragePath { get; set; } = Path.Combine("App_Data", "certificates");
 
-    public string? SelfUpdateCommand { get; set; }
+    public string SelfUpdateRepoUrl { get; set; } = "https://github.com/Jeffe747/Helgrind.git";
 
-    public string? SelfUpdateWorkingDirectory { get; set; }
+    public string SelfUpdateBranch { get; set; } = "master";
+
+    public string SelfUpdateLogPath { get; set; } = "/var/log/helgrind-self-update.log";
 
     public bool TelemetryEnabled { get; set; } = true;
 

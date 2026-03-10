@@ -16,7 +16,7 @@ public sealed class ConfigurationService(
     IOptions<HelgrindOptions> options,
     IWebHostEnvironment environment,
     AdminAccessService adminAccessService,
-    SelfUpdateService selfUpdateService)
+    ISelfUpdateService selfUpdateService)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 

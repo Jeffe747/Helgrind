@@ -27,7 +27,7 @@ if (configuredOptions.PublicHttpsPort == configuredOptions.AdminHttpsPort)
 builder.Services.Configure<HelgrindOptions>(builder.Configuration.GetSection(HelgrindOptions.SectionName));
 builder.Services.AddSingleton(certificateRuntimeState);
 builder.Services.AddSingleton<AdminAccessService>();
-builder.Services.AddSingleton<SelfUpdateService>();
+builder.Services.AddSingleton<ISelfUpdateService, SelfUpdateService>();
 builder.Services.AddSingleton<InMemoryProxyConfigProvider>();
 builder.Services.AddSingleton<TelemetryRateTracker>();
 builder.Services.AddSingleton<TelemetryEventSink>();
