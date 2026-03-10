@@ -6,7 +6,7 @@ Helgrind is a .NET 10 reverse proxy gateway built on YARP. It gives you a small 
 
 Systemd files are included in [deploy/systemd/helgrind.service](/e:/Development/Helgrind/deploy/systemd/helgrind.service) and [deploy/systemd/helgrind.env.example](/e:/Development/Helgrind/deploy/systemd/helgrind.env.example).
 
-The intended Ubuntu flow is:
+The intended Ubuntu flow is: 
 
 - install with `deploy/linux/install.sh`
 - keep the source checkout in `/opt/helgrind-src`
