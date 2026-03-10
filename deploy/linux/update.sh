@@ -10,6 +10,15 @@ REPO_URL="${HELGRIND_REPO_URL:-https://github.com/Jeffe747/Helgrind.git}"
 REPO_REF="${HELGRIND_REPO_REF:-main}"
 SOURCE_DIR="${HELGRIND_SOURCE_DIR:-/opt/helgrind-src}"
 INSTALL_DIR="${HELGRIND_INSTALL_DIR:-/opt/helgrind}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo-url) REPO_URL="$2"; shift 2 ;;
+    --branch)   REPO_REF="$2"; shift 2 ;;
+    --install-dir) INSTALL_DIR="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
 STATE_DIR="${HELGRIND_STATE_DIR:-/var/lib/helgrind}"
 CONFIG_DIR="${HELGRIND_CONFIG_DIR:-/etc/helgrind}"
 SERVICE_NAME="${HELGRIND_SERVICE_NAME:-helgrind}"
@@ -111,7 +120,6 @@ updates = {
   "HELGRIND_REPO_REF": repo_ref,
   "HELGRIND_UPDATE_LOG": f"{state_dir}/update.log",
   "HELGRIND_DEPLOYED_REF_FILE": f"{state_dir}/deployed-ref.txt",
-  "Helgrind__SelfUpdateWorkingDirectory": source_dir,
 }
 
 for key, value in updates.items():

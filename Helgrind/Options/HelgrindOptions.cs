@@ -31,7 +31,7 @@ public sealed class HelgrindOptions
 
     public string SelfUpdateRepoUrl { get; set; } = "https://github.com/Jeffe747/Helgrind.git";
 
-    public string SelfUpdateBranch { get; set; } = "master";
+    public string SelfUpdateBranch { get; set; } = "main";
 
     public string SelfUpdateLogPath { get; set; } = "/var/log/helgrind-self-update.log";
 

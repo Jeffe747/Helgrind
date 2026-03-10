@@ -9,6 +9,7 @@ namespace Helgrind.Tests;
 public sealed class SelfUpdateServiceTests : IDisposable
 {
     private readonly string _contentRootPath = Path.Combine(Path.GetTempPath(), $"helgrind-self-update-{Guid.NewGuid():N}");
+    private string ScriptPath => Path.Combine(_contentRootPath, "deploy", "linux", "update.sh");
 
     public SelfUpdateServiceTests()
     {
@@ -18,7 +19,7 @@ public sealed class SelfUpdateServiceTests : IDisposable
     [Fact]
     public void IsConfigured_ReturnsFalse_InDevelopment_EvenWhenScriptExists()
     {
-        File.WriteAllText(Path.Combine(_contentRootPath, "update.sh"), "#!/usr/bin/env bash\n");
+        CreateScript();
 
         var service = CreateService(new HelgrindOptions(), environmentName: "Development");
 
@@ -32,13 +33,13 @@ public sealed class SelfUpdateServiceTests : IDisposable
         var service = CreateService(new HelgrindOptions(), environmentName: "Production");
 
         Assert.False(service.IsConfigured);
-        Assert.Contains("update.sh", service.GetStatusMessage(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("update script", service.GetStatusMessage(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void IsConfigured_ReturnsTrue_InProduction_WhenScriptExists()
     {
-        File.WriteAllText(Path.Combine(_contentRootPath, "update.sh"), "#!/usr/bin/env bash\n");
+        CreateScript();
 
         var service = CreateService(new HelgrindOptions(), environmentName: "Production");
 
@@ -48,13 +49,13 @@ public sealed class SelfUpdateServiceTests : IDisposable
     [Fact]
     public void GetStatusMessage_DescribesScriptAndBranch_WhenConfigured()
     {
-        File.WriteAllText(Path.Combine(_contentRootPath, "update.sh"), "#!/usr/bin/env bash\n");
+        CreateScript();
 
-        var service = CreateService(new HelgrindOptions { SelfUpdateBranch = "master" }, environmentName: "Production");
+        var service = CreateService(new HelgrindOptions { SelfUpdateBranch = "main" }, environmentName: "Production");
 
         var message = service.GetStatusMessage();
         Assert.Contains("update.sh", message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("master", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("main", message, StringComparison.OrdinalIgnoreCase);
     }
 
     public void Dispose()
@@ -63,6 +64,12 @@ public sealed class SelfUpdateServiceTests : IDisposable
         {
             Directory.Delete(_contentRootPath, true);
         }
+    }
+
+    private void CreateScript()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ScriptPath)!);
+        File.WriteAllText(ScriptPath, "#!/usr/bin/env bash\n");
     }
 
     private SelfUpdateService CreateService(HelgrindOptions options, string environmentName)

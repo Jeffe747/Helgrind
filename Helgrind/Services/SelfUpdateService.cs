@@ -22,7 +22,7 @@ public sealed class SelfUpdateService(
 
     public bool IsConfigured => !environment.IsDevelopment() && File.Exists(ScriptPath);
 
-    private string ScriptPath => Path.Combine(environment.ContentRootPath, "update.sh");
+    private string ScriptPath => Path.Combine(environment.ContentRootPath, "deploy", "linux", "update.sh");
 
     public string GetStatusMessage()
     {
@@ -34,7 +34,7 @@ public sealed class SelfUpdateService(
         var scriptPath = ScriptPath;
         if (!File.Exists(scriptPath))
         {
-            return $"Self-update is not available. Expected update.sh at {scriptPath}.";
+            return $"Self-update is not available. Expected update script at {scriptPath}.";
         }
 
         return $"Runs {scriptPath} to pull from {options.Value.SelfUpdateBranch} and restart the Helgrind service.";
@@ -58,7 +58,8 @@ public sealed class SelfUpdateService(
         var logPath = options.Value.SelfUpdateLogPath;
         var repoUrl = EscapeSingleQuoted(options.Value.SelfUpdateRepoUrl);
         var branch = EscapeSingleQuoted(options.Value.SelfUpdateBranch);
-        var command = $"nohup '{EscapeSingleQuoted(scriptPath)}' --repo-url '{repoUrl}' --branch '{branch}' > '{EscapeSingleQuoted(logPath)}' 2>&1 &";
+        var installDir = EscapeSingleQuoted(environment.ContentRootPath);
+        var command = $"nohup sudo /bin/bash '{EscapeSingleQuoted(scriptPath)}' --repo-url '{repoUrl}' --branch '{branch}' --install-dir '{installDir}' > '{EscapeSingleQuoted(logPath)}' 2>&1 &";
 
         using var process = new Process
         {
