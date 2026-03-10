@@ -5,7 +5,6 @@ using Helgrind.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -37,7 +36,7 @@ public sealed class ConfigurationServiceTests : IDisposable
         });
         var runtimeState = new CertificateRuntimeState();
         var certificateService = new CertificateService(dbContext, runtimeState, hostEnvironment, options);
-        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, new TestHostApplicationLifetime(), NullLogger<SelfUpdateService>.Instance);
+        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, NullLogger<SelfUpdateService>.Instance);
         var configurationService = new ConfigurationService(
             dbContext,
             new ProxyConfigFactory(),
@@ -122,7 +121,7 @@ public sealed class ConfigurationServiceTests : IDisposable
         });
         var runtimeState = new CertificateRuntimeState();
         var certificateService = new CertificateService(dbContext, runtimeState, hostEnvironment, options);
-        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, new TestHostApplicationLifetime(), NullLogger<SelfUpdateService>.Instance);
+        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, NullLogger<SelfUpdateService>.Instance);
         var configurationService = new ConfigurationService(
             dbContext,
             new ProxyConfigFactory(),
@@ -196,7 +195,7 @@ public sealed class ConfigurationServiceTests : IDisposable
         });
         var runtimeState = new CertificateRuntimeState();
         var certificateService = new CertificateService(dbContext, runtimeState, hostEnvironment, options);
-        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, new TestHostApplicationLifetime(), NullLogger<SelfUpdateService>.Instance);
+        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, NullLogger<SelfUpdateService>.Instance);
         var configurationService = new ConfigurationService(
             dbContext,
             new ProxyConfigFactory(),
@@ -289,16 +288,4 @@ public sealed class ConfigurationServiceTests : IDisposable
         public IFileProvider ContentRootFileProvider { get; set; } = new PhysicalFileProvider(contentRootPath);
     }
 
-    private sealed class TestHostApplicationLifetime : IHostApplicationLifetime
-    {
-        public CancellationToken ApplicationStarted => CancellationToken.None;
-
-        public CancellationToken ApplicationStopping => CancellationToken.None;
-
-        public CancellationToken ApplicationStopped => CancellationToken.None;
-
-        public void StopApplication()
-        {
-        }
-    }
 }
