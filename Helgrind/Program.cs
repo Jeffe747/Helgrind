@@ -84,6 +84,23 @@ var helgrindOptions = app.Services.GetRequiredService<Microsoft.Extensions.Optio
 
 app.MapWhen(context => context.Connection.LocalPort == helgrindOptions.AdminHttpsPort, adminApp =>
 {
+	adminApp.UseExceptionHandler(errorApp =>
+	{
+		errorApp.Run(async context =>
+		{
+			var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+			var exception = feature?.Error;
+			context.Response.ContentType = "application/json";
+			context.Response.StatusCode = exception is InvalidOperationException or ArgumentException
+				? StatusCodes.Status400BadRequest
+				: StatusCodes.Status500InternalServerError;
+			await context.Response.WriteAsJsonAsync(new
+			{
+				Error = exception?.Message ?? "An unexpected server error occurred."
+			});
+		});
+	});
+
 	adminApp.Use(async (context, next) =>
 	{
 		var adminAccessService = context.RequestServices.GetRequiredService<AdminAccessService>();

@@ -210,22 +210,33 @@ bindFilters();
 loadConfiguration();
 
 async function loadConfiguration(selectionToRestore = null) {
-    const response = await fetch("/api/admin/configuration");
-    state.configuration = await response.json();
-    state.selected = selectionToRestore;
+    try {
+        const response = await fetch("/api/admin/configuration");
+        if (!response.ok) {
+            const text = await response.text();
+            let message = text;
+            try { message = JSON.parse(text)?.error || text; } catch { /* ignore */ }
+            setStatus(`Could not load configuration: ${message}`);
+            return;
+        }
+        state.configuration = await response.json();
+        state.selected = selectionToRestore;
 
-    if (state.selected?.type === "route" && !getSelectedRoute()) {
-        state.selected = null;
-    }
+        if (state.selected?.type === "route" && !getSelectedRoute()) {
+            state.selected = null;
+        }
 
-    if (state.selected?.type === "cluster" && !getSelectedCluster()) {
-        state.selected = null;
-    }
+        if (state.selected?.type === "cluster" && !getSelectedCluster()) {
+            state.selected = null;
+        }
 
-    render();
+        render();
 
-    if (!state.telemetry.lastLoadedUtc || state.activeView === "empty") {
-        await loadTelemetry();
+        if (!state.telemetry.lastLoadedUtc || state.activeView === "empty") {
+            await loadTelemetry();
+        }
+    } catch (err) {
+        setStatus(`Could not load configuration: ${err.message}`);
     }
 }
 
@@ -376,14 +387,18 @@ async function uploadCertificate(event) {
     formData.append("pemFile", pemFile);
     formData.append("keyFile", keyFile);
 
-    const response = await fetch("/api/admin/certificate", {
-        method: "POST",
-        body: formData,
-    });
-    const result = await response.json();
-    setStatus(result.statusMessage);
-    event.target.reset();
-    document.getElementById("certificate-menu")?.removeAttribute("open");
+    try {
+        const response = await fetch("/api/admin/certificate", {
+            method: "POST",
+            body: formData,
+        });
+        const result = await response.json();
+        setStatus(result.statusMessage || (response.ok ? "Certificate uploaded." : "Certificate upload failed."));
+        event.target.reset();
+        document.getElementById("certificate-menu")?.removeAttribute("open");
+    } catch (err) {
+        setStatus(`Certificate upload failed: ${err.message}`);
+    }
     await loadConfiguration();
 }
 
