@@ -35,7 +35,7 @@ Update script:
 - writes `/var/lib/helgrind/update.log` and `/var/lib/helgrind/deployed-ref.txt`
 
 Remove the installation:
-
+ 
 ```bash
 sudo /bin/bash /opt/helgrind-src/deploy/linux/uninstall.sh
 ``` 
