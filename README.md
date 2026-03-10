@@ -38,7 +38,7 @@ Remove the installation:
 
 ```bash
 sudo /bin/bash /opt/helgrind-src/deploy/linux/uninstall.sh
-```
+``` 
 
 Example install command:
 
