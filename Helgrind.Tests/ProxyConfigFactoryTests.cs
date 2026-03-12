@@ -1,5 +1,6 @@
 using Helgrind.Contracts;
 using Helgrind.Services;
+using System.Text.Json;
 
 namespace Helgrind.Tests;
 
@@ -113,5 +114,83 @@ public sealed class ProxyConfigFactoryTests
         var result = _factory.Build(configuration);
 
         Assert.Contains(result.Errors, error => error.Contains("invalid health check interval", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Build_WithAllowedClientNetworks_EmitsRouteMetadata()
+    {
+        var configuration = new HelgrindConfigurationDto
+        {
+            Routes =
+            [
+                new RouteDto
+                {
+                    RouteId = "route1",
+                    ClusterId = "cluster1",
+                    Hosts = ["assistant.icicle.dk"],
+                    AllowedClientNetworks = ["85.184.162.188", "185.50.193.0/24"]
+                }
+            ],
+            Clusters =
+            [
+                new ClusterDto
+                {
+                    ClusterId = "cluster1",
+                    Destinations =
+                    [
+                        new DestinationDto
+                        {
+                            DestinationId = "destination1",
+                            Address = "https://backend.internal:5001"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var result = _factory.Build(configuration);
+
+        Assert.Empty(result.Errors);
+        var route = Assert.Single(result.Routes);
+        var serializedNetworks = route.Metadata![ProxyMetadataKeys.AllowedClientNetworks];
+        var parsedNetworks = JsonSerializer.Deserialize<List<string>>(serializedNetworks);
+        Assert.Equal(["85.184.162.188/32", "185.50.193.0/24"], parsedNetworks);
+    }
+
+    [Fact]
+    public void Build_WithInvalidAllowedClientNetwork_ReturnsValidationError()
+    {
+        var configuration = new HelgrindConfigurationDto
+        {
+            Routes =
+            [
+                new RouteDto
+                {
+                    RouteId = "route1",
+                    ClusterId = "cluster1",
+                    Hosts = ["assistant.icicle.dk"],
+                    AllowedClientNetworks = ["not-an-ip"]
+                }
+            ],
+            Clusters =
+            [
+                new ClusterDto
+                {
+                    ClusterId = "cluster1",
+                    Destinations =
+                    [
+                        new DestinationDto
+                        {
+                            DestinationId = "destination1",
+                            Address = "https://backend.internal:5001"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var result = _factory.Build(configuration);
+
+        Assert.Contains(result.Errors, error => error.Contains("allowed client network", StringComparison.OrdinalIgnoreCase));
     }
 }

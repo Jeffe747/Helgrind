@@ -19,6 +19,8 @@ public sealed class RouteDto
 
     public List<string> Hosts { get; set; } = [];
 
+    public List<string> AllowedClientNetworks { get; set; } = [];
+
     public int? Order { get; set; }
 }
 

@@ -78,6 +78,7 @@ public sealed class ConfigurationService(
                     ""ClusterId"" text NOT NULL,
                     ""Path"" text NOT NULL,
                     ""HostsJson"" text NOT NULL,
+                    ""AllowedClientNetworksJson"" text NOT NULL DEFAULT '[]',
                     ""Order"" integer NOT NULL
                 );",
                 cancellationToken);
@@ -134,6 +135,7 @@ public sealed class ConfigurationService(
                 @"CREATE INDEX IF NOT EXISTS ""IX_Destinations_ClusterId"" ON ""Destinations"" (""ClusterId"");",
                 cancellationToken);
 
+            await EnsureRouteAllowedClientNetworksColumnAsync(cancellationToken);
             await EnsureDestinationKeysAreClusterScopedAsync(cancellationToken);
             return;
         }
@@ -170,7 +172,46 @@ public sealed class ConfigurationService(
             @"CREATE INDEX IF NOT EXISTS ""IX_SuspiciousRequestEvents_RiskScore"" ON ""SuspiciousRequestEvents"" (""RiskScore"");",
             cancellationToken);
 
+        await EnsureRouteAllowedClientNetworksColumnAsync(cancellationToken);
         await EnsureDestinationKeysAreClusterScopedAsync(cancellationToken);
+    }
+
+    private async Task EnsureRouteAllowedClientNetworksColumnAsync(CancellationToken cancellationToken)
+    {
+        var connection = dbContext.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        if (dbContext.Database.IsNpgsql())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Routes"" ADD COLUMN IF NOT EXISTS ""AllowedClientNetworksJson"" text NOT NULL DEFAULT '[]';",
+                cancellationToken);
+            return;
+        }
+
+        var columnNames = new List<string>();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "PRAGMA table_info(\"Routes\")";
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                columnNames.Add(reader.GetString(reader.GetOrdinal("name")));
+            }
+        }
+
+        if (columnNames.Contains("AllowedClientNetworksJson", StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"ALTER TABLE ""Routes"" ADD COLUMN ""AllowedClientNetworksJson"" TEXT NOT NULL DEFAULT '[]';",
+            cancellationToken);
     }
 
     private async Task EnsureDestinationKeysAreClusterScopedAsync(CancellationToken cancellationToken)
@@ -306,6 +347,7 @@ ORDER BY array_position(index_definition.indkey, attribute.attnum);";
                 ClusterId = route.ClusterId,
                 Path = route.Path,
                 Hosts = JsonSerializer.Deserialize<List<string>>(route.HostsJson, JsonOptions) ?? [],
+                AllowedClientNetworks = JsonSerializer.Deserialize<List<string>>(route.AllowedClientNetworksJson, JsonOptions) ?? [],
                 Order = route.Order,
             }).ToList(),
             Clusters = clusters.Select(cluster => new ClusterDto
@@ -467,6 +509,7 @@ ORDER BY array_position(index_definition.indkey, attribute.attnum);";
                 ClusterId = route.ClusterId,
                 Path = route.Path,
                 HostsJson = JsonSerializer.Serialize(route.Hosts, JsonOptions),
+                AllowedClientNetworksJson = JsonSerializer.Serialize(route.AllowedClientNetworks, JsonOptions),
                 Order = route.Order ?? 0,
             });
         }
@@ -560,6 +603,11 @@ ORDER BY array_position(index_definition.indkey, attribute.attnum);";
                     Hosts = route.Hosts
                         .Select(host => host.Trim())
                         .Where(host => !string.IsNullOrWhiteSpace(host))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList(),
+                    AllowedClientNetworks = route.AllowedClientNetworks
+                        .Select(network => network.Trim())
+                        .Where(network => !string.IsNullOrWhiteSpace(network))
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList(),
                     Order = route.Order ?? 0,

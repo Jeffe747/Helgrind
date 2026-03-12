@@ -13,6 +13,8 @@ public sealed class ProxyRouteEntity
 
     public string HostsJson { get; set; } = "[]";
 
+    public string AllowedClientNetworksJson { get; set; } = "[]";
+
     public int Order { get; set; }
 }
 

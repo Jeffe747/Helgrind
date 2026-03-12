@@ -1,10 +1,13 @@
 using Helgrind.Contracts;
+using System.Text.Json;
 using Yarp.ReverseProxy.Configuration;
 
 namespace Helgrind.Services;
 
 public sealed class ProxyConfigFactory
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     public ProxyConfigBuildResult Build(HelgrindConfigurationDto configuration)
     {
         var errors = new List<string>();
@@ -114,11 +117,38 @@ public sealed class ProxyConfigFactory
                 continue;
             }
 
+            var allowedClientNetworks = new List<string>();
+            foreach (var configuredNetwork in route.AllowedClientNetworks)
+            {
+                try
+                {
+                    allowedClientNetworks.Add(NetworkRange.Parse(configuredNetwork).ToString());
+                }
+                catch (InvalidOperationException exception)
+                {
+                    errors.Add($"Route '{route.RouteId}' contains an invalid allowed client network '{configuredNetwork}': {exception.Message}");
+                }
+                catch (FormatException)
+                {
+                    errors.Add($"Route '{route.RouteId}' contains an invalid allowed client network '{configuredNetwork}'.");
+                }
+            }
+
+            Dictionary<string, string>? metadata = null;
+            if (allowedClientNetworks.Count > 0)
+            {
+                metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [ProxyMetadataKeys.AllowedClientNetworks] = JsonSerializer.Serialize(allowedClientNetworks, JsonOptions)
+                };
+            }
+
             routes.Add(new RouteConfig
             {
                 RouteId = route.RouteId,
                 ClusterId = route.ClusterId,
                 Order = route.Order ?? 0,
+                Metadata = metadata,
                 Match = new RouteMatch
                 {
                     Hosts = route.Hosts,

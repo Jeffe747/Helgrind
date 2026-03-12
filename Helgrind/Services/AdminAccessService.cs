@@ -42,56 +42,6 @@ public sealed class AdminAccessService
 
     private static IPAddress Normalize(IPAddress address)
     {
-        return address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
-    }
-
-    private sealed class NetworkRange(IPAddress networkAddress, int prefixLength)
-    {
-        public static NetworkRange Parse(string value)
-        {
-            var parts = value.Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 2)
-            {
-                throw new InvalidOperationException($"Invalid CIDR value '{value}'.");
-            }
-
-            var address = Normalize(IPAddress.Parse(parts[0]));
-            if (!int.TryParse(parts[1], out var prefixLength))
-            {
-                throw new InvalidOperationException($"Invalid prefix length in CIDR value '{value}'.");
-            }
-
-            return new NetworkRange(address, prefixLength);
-        }
-
-        public bool Contains(IPAddress address)
-        {
-            var normalizedAddress = Normalize(address);
-            if (normalizedAddress.AddressFamily != networkAddress.AddressFamily)
-            {
-                return false;
-            }
-
-            var addressBytes = normalizedAddress.GetAddressBytes();
-            var networkBytes = networkAddress.GetAddressBytes();
-            var fullBytes = prefixLength / 8;
-            var remainingBits = prefixLength % 8;
-
-            for (var index = 0; index < fullBytes; index++)
-            {
-                if (addressBytes[index] != networkBytes[index])
-                {
-                    return false;
-                }
-            }
-
-            if (remainingBits == 0)
-            {
-                return true;
-            }
-
-            var mask = (byte)(0xFF << (8 - remainingBits));
-            return (addressBytes[fullBytes] & mask) == (networkBytes[fullBytes] & mask);
-        }
+        return NetworkRange.Normalize(address);
     }
 }

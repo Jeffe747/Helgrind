@@ -12,11 +12,25 @@ public sealed class AdminAccessServiceTests
     [InlineData("10.0.4.99")]
     [InlineData("172.16.8.11")]
     [InlineData("::1")]
+    [InlineData("fc00::1")]
     public void IsAllowed_ReturnsTrue_ForLoopbackAndPrivateNetworks(string address)
     {
         var service = CreateService();
 
         Assert.True(service.IsAllowed(IPAddress.Parse(address)));
+    }
+
+    [Fact]
+    public void IsAllowed_SupportsSingleIpEntries()
+    {
+        var options = Microsoft.Extensions.Options.Options.Create(new Helgrind.Options.HelgrindOptions
+        {
+            AllowedAdminNetworks = ["203.0.113.14"]
+        });
+        var service = new AdminAccessService(options);
+
+        Assert.True(service.IsAllowed(IPAddress.Parse("203.0.113.14")));
+        Assert.False(service.IsAllowed(IPAddress.Parse("203.0.113.15")));
     }
 
     [Theory]

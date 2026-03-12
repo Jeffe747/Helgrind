@@ -31,6 +31,7 @@ builder.Services.AddSingleton<InMemoryProxyConfigProvider>();
 builder.Services.AddSingleton<TelemetryRateTracker>();
 builder.Services.AddSingleton<TelemetryEventSink>();
 builder.Services.AddSingleton<TelemetryRouteMatcher>();
+builder.Services.AddSingleton<PublicClientAddressResolver>();
 builder.Services.AddSingleton<TelemetryClassifierService>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<Yarp.ReverseProxy.Configuration.IProxyConfigProvider>(static serviceProvider => serviceProvider.GetRequiredService<InMemoryProxyConfigProvider>());
@@ -150,6 +151,7 @@ app.MapWhen(context => context.Connection.LocalPort == helgrindOptions.PublicHtt
 	publicApp.UseRouting();
 	publicApp.UseMiddleware<PublicTelemetryMiddleware>();
 	publicApp.UseMiddleware<PublicTelemetrySmokeMiddleware>();
+	publicApp.UseMiddleware<PublicRouteAccessMiddleware>();
 	publicApp.UseEndpoints(endpoints =>
 	{
 		endpoints.MapReverseProxy();

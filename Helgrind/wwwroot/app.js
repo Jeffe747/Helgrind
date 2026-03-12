@@ -99,6 +99,7 @@ document.getElementById("add-route").addEventListener("click", () => {
         clusterId: state.configuration.clusters[0]?.clusterId ?? "cluster1",
         path: "{**catch-all}",
         hosts: [],
+        allowedClientNetworks: [],
         order: 0,
     };
     state.configuration.routes.push(nextRoute);
@@ -480,7 +481,7 @@ async function triggerSelfUpdate() {
 }
 
 function bindRouteEditor() {
-    ["route-id", "route-cluster-id", "route-path", "route-hosts", "route-order"].forEach(id => {
+    ["route-id", "route-cluster-id", "route-path", "route-hosts", "route-allowed-client-networks", "route-order"].forEach(id => {
         document.getElementById(id).addEventListener("input", () => {
             const route = getSelectedRoute();
             if (!route) {
@@ -493,6 +494,10 @@ function bindRouteEditor() {
             route.hosts = document.getElementById("route-hosts").value
                 .split(/\r?\n|,/)
                 .map(host => host.trim())
+                .filter(Boolean);
+            route.allowedClientNetworks = document.getElementById("route-allowed-client-networks").value
+                .split(/\r?\n|,/)
+                .map(network => network.trim())
                 .filter(Boolean);
             route.order = parseIntegerOrDefault(document.getElementById("route-order").value, 0);
             state.selected.id = route.routeId;
@@ -669,6 +674,7 @@ function renderEditor() {
         document.getElementById("route-cluster-id").value = route.clusterId;
         document.getElementById("route-path").value = route.path;
         document.getElementById("route-hosts").value = route.hosts.join("\n");
+        document.getElementById("route-allowed-client-networks").value = (route.allowedClientNetworks || []).join("\n");
         document.getElementById("route-order").value = route.order;
         updateEditorDraftState();
         return;
@@ -1075,6 +1081,7 @@ function snapshotRoute(route) {
         clusterId: route.clusterId || "",
         path: route.path || "{**catch-all}",
         hosts: [...(route.hosts || [])],
+        allowedClientNetworks: [...(route.allowedClientNetworks || [])],
         order: Number.isFinite(route.order) ? route.order : 0,
     });
 }
@@ -1162,6 +1169,7 @@ function sanitizeConfigurationForSave(configuration) {
         clusterId: route.clusterId || "",
         path: route.path || "{**catch-all}",
         hosts: Array.isArray(route.hosts) ? route.hosts : [],
+        allowedClientNetworks: Array.isArray(route.allowedClientNetworks) ? route.allowedClientNetworks : [],
         order: Number.isFinite(route.order) ? route.order : 0,
     }));
 

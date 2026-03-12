@@ -6,10 +6,7 @@ public sealed class TelemetryRouteMatcher(InMemoryProxyConfigProvider proxyConfi
 {
     public RouteMatchResult Match(string host, string path)
     {
-        var routes = proxyConfigProvider.GetConfig().Routes
-            .OrderBy(route => route.Order ?? 0)
-            .ThenBy(route => route.RouteId, StringComparer.OrdinalIgnoreCase);
-
+        var routes = GetOrderedRoutes();
         var anyHostMatched = false;
         var anyPathMatched = false;
 
@@ -28,6 +25,24 @@ public sealed class TelemetryRouteMatcher(InMemoryProxyConfigProvider proxyConfi
 
         return new RouteMatchResult(false, null, null, anyHostMatched, anyPathMatched);
     }
+
+    public RouteConfig? MatchRoute(string? host, string? path)
+    {
+        var normalizedHost = NormalizeHost(host);
+        var normalizedPath = NormalizePath(path);
+
+        return GetOrderedRoutes().FirstOrDefault(route =>
+            HostsMatch(route.Match?.Hosts, normalizedHost)
+            && PathMatches(route.Match?.Path, normalizedPath));
+    }
+
+    private IEnumerable<RouteConfig> GetOrderedRoutes()
+        => proxyConfigProvider.GetConfig().Routes
+            .OrderBy(route => route.Order ?? 0)
+            .ThenBy(route => route.RouteId, StringComparer.OrdinalIgnoreCase);
+
+    private static string NormalizeHost(string? host)
+        => string.IsNullOrWhiteSpace(host) ? "unknown" : host.Trim().ToLowerInvariant();
 
     private static bool HostsMatch(IReadOnlyList<string>? routeHosts, string requestHost)
     {
@@ -65,7 +80,7 @@ public sealed class TelemetryRouteMatcher(InMemoryProxyConfigProvider proxyConfi
         return normalizedPath.Equals(normalizedPattern, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string NormalizePath(string value)
+    private static string NormalizePath(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
