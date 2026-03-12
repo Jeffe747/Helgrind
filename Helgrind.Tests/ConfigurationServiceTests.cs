@@ -515,6 +515,349 @@ public sealed class ConfigurationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveConfigurationAsync_AddsRouteAndCluster()
+    {
+        await using var dbContext = CreateDbContext();
+        var hostEnvironment = new TestWebHostEnvironment(_contentRootPath);
+        var options = Microsoft.Extensions.Options.Options.Create(new HelgrindOptions
+        {
+            PublicHttpsPort = 443,
+            AdminHttpsPort = 8444,
+            DatabasePath = "App_Data/helgrind.db",
+            CertificateStoragePath = "App_Data/certificates"
+        });
+        var runtimeState = new CertificateRuntimeState();
+        var certificateService = new CertificateService(dbContext, runtimeState, hostEnvironment, options);
+        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, NullLogger<SelfUpdateService>.Instance);
+        var configurationService = new ConfigurationService(
+            dbContext,
+            new ProxyConfigFactory(),
+            new InMemoryProxyConfigProvider(),
+            certificateService,
+            options,
+            hostEnvironment,
+            new AdminAccessService(options),
+            selfUpdateService);
+
+        await configurationService.InitializeAsync(CancellationToken.None);
+
+        await configurationService.SaveConfigurationAsync(
+            new HelgrindConfigurationDto
+            {
+                Routes =
+                [
+                    new RouteDto
+                    {
+                        RouteId = "route-create",
+                        ClusterId = "cluster-create",
+                        Path = "/api/{**catch-all}",
+                        Hosts = ["api.example.com"],
+                        Order = 5,
+                    }
+                ],
+                Clusters =
+                [
+                    new ClusterDto
+                    {
+                        ClusterId = "cluster-create",
+                        LoadBalancingPolicy = "RoundRobin",
+                        HealthCheck = new HealthCheckDto
+                        {
+                            Enabled = true,
+                            Interval = "00:00:15",
+                            Timeout = "00:00:05",
+                            Policy = "ConsecutiveFailures",
+                            Path = "/healthz",
+                            Query = "?full=true",
+                        },
+                        ConsecutiveFailuresThreshold = 3,
+                        Destinations =
+                        [
+                            new DestinationDto
+                            {
+                                DestinationId = "destination-create",
+                                Address = "https://backend-create.internal:5001"
+                            }
+                        ]
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        var configuration = await configurationService.GetConfigurationAsync(CancellationToken.None);
+
+        var route = Assert.Single(configuration.Routes);
+        Assert.Equal("route-create", route.RouteId);
+        Assert.Equal("cluster-create", route.ClusterId);
+        Assert.Equal("/api/{**catch-all}", route.Path);
+        Assert.Equal(["api.example.com"], route.Hosts);
+        Assert.Equal(5, route.Order);
+
+        var cluster = Assert.Single(configuration.Clusters);
+        Assert.Equal("cluster-create", cluster.ClusterId);
+        Assert.Equal("RoundRobin", cluster.LoadBalancingPolicy);
+        Assert.True(cluster.HealthCheck.Enabled);
+        Assert.Equal("00:00:15", cluster.HealthCheck.Interval);
+        Assert.Equal("00:00:05", cluster.HealthCheck.Timeout);
+        Assert.Equal("/healthz", cluster.HealthCheck.Path);
+        Assert.Equal("?full=true", cluster.HealthCheck.Query);
+        Assert.Equal(3, cluster.ConsecutiveFailuresThreshold);
+        var destination = Assert.Single(cluster.Destinations);
+        Assert.Equal("destination-create", destination.DestinationId);
+        Assert.Equal("https://backend-create.internal:5001", destination.Address);
+    }
+
+    [Fact]
+    public async Task SaveConfigurationAsync_UpdatesExistingRouteAndCluster()
+    {
+        await using var dbContext = CreateDbContext();
+        var hostEnvironment = new TestWebHostEnvironment(_contentRootPath);
+        var options = Microsoft.Extensions.Options.Options.Create(new HelgrindOptions
+        {
+            PublicHttpsPort = 443,
+            AdminHttpsPort = 8444,
+            DatabasePath = "App_Data/helgrind.db",
+            CertificateStoragePath = "App_Data/certificates"
+        });
+        var runtimeState = new CertificateRuntimeState();
+        var certificateService = new CertificateService(dbContext, runtimeState, hostEnvironment, options);
+        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, NullLogger<SelfUpdateService>.Instance);
+        var configurationService = new ConfigurationService(
+            dbContext,
+            new ProxyConfigFactory(),
+            new InMemoryProxyConfigProvider(),
+            certificateService,
+            options,
+            hostEnvironment,
+            new AdminAccessService(options),
+            selfUpdateService);
+
+        await configurationService.InitializeAsync(CancellationToken.None);
+        await configurationService.SaveConfigurationAsync(
+            new HelgrindConfigurationDto
+            {
+                Routes =
+                [
+                    new RouteDto
+                    {
+                        RouteId = "route-update",
+                        ClusterId = "cluster-update",
+                        Path = "/api/{**catch-all}",
+                        Hosts = ["api.example.com"],
+                        Order = 1,
+                    }
+                ],
+                Clusters =
+                [
+                    new ClusterDto
+                    {
+                        ClusterId = "cluster-update",
+                        Destinations =
+                        [
+                            new DestinationDto
+                            {
+                                DestinationId = "destination-update",
+                                Address = "https://backend-old.internal:5001"
+                            }
+                        ]
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        await configurationService.SaveConfigurationAsync(
+            new HelgrindConfigurationDto
+            {
+                Routes =
+                [
+                    new RouteDto
+                    {
+                        RouteId = "route-update",
+                        ClusterId = "cluster-update",
+                        Path = "/v2/{**catch-all}",
+                        Hosts = ["api.example.com", "admin.example.com"],
+                        Order = 9,
+                    }
+                ],
+                Clusters =
+                [
+                    new ClusterDto
+                    {
+                        ClusterId = "cluster-update",
+                        LoadBalancingPolicy = "LeastRequests",
+                        HealthCheck = new HealthCheckDto
+                        {
+                            Enabled = true,
+                            Interval = "00:00:20",
+                            Timeout = "00:00:04",
+                            Policy = "ConsecutiveFailures",
+                            Path = "/ready",
+                            Query = "?probe=1",
+                        },
+                        ConsecutiveFailuresThreshold = 2,
+                        Destinations =
+                        [
+                            new DestinationDto
+                            {
+                                DestinationId = "destination-update",
+                                Address = "https://backend-new.internal:5443"
+                            },
+                            new DestinationDto
+                            {
+                                DestinationId = "destination-update-2",
+                                Address = "https://backend-secondary.internal:5444"
+                            }
+                        ]
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        var configuration = await configurationService.GetConfigurationAsync(CancellationToken.None);
+
+        var route = Assert.Single(configuration.Routes);
+        Assert.Equal("/v2/{**catch-all}", route.Path);
+        Assert.Equal(["api.example.com", "admin.example.com"], route.Hosts);
+        Assert.Equal(9, route.Order);
+
+        var cluster = Assert.Single(configuration.Clusters);
+        Assert.Equal("LeastRequests", cluster.LoadBalancingPolicy);
+        Assert.True(cluster.HealthCheck.Enabled);
+        Assert.Equal("00:00:20", cluster.HealthCheck.Interval);
+        Assert.Equal("00:00:04", cluster.HealthCheck.Timeout);
+        Assert.Equal("/ready", cluster.HealthCheck.Path);
+        Assert.Equal("?probe=1", cluster.HealthCheck.Query);
+        Assert.Equal(2, cluster.ConsecutiveFailuresThreshold);
+        Assert.Equal(2, cluster.Destinations.Count);
+        Assert.Contains(cluster.Destinations, destination =>
+            destination.DestinationId == "destination-update"
+            && destination.Address == "https://backend-new.internal:5443");
+        Assert.Contains(cluster.Destinations, destination =>
+            destination.DestinationId == "destination-update-2"
+            && destination.Address == "https://backend-secondary.internal:5444");
+    }
+
+    [Fact]
+    public async Task SaveConfigurationAsync_DeletesRemovedRoutesAndClusters()
+    {
+        await using var dbContext = CreateDbContext();
+        var hostEnvironment = new TestWebHostEnvironment(_contentRootPath);
+        var options = Microsoft.Extensions.Options.Options.Create(new HelgrindOptions
+        {
+            PublicHttpsPort = 443,
+            AdminHttpsPort = 8444,
+            DatabasePath = "App_Data/helgrind.db",
+            CertificateStoragePath = "App_Data/certificates"
+        });
+        var runtimeState = new CertificateRuntimeState();
+        var certificateService = new CertificateService(dbContext, runtimeState, hostEnvironment, options);
+        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, NullLogger<SelfUpdateService>.Instance);
+        var configurationService = new ConfigurationService(
+            dbContext,
+            new ProxyConfigFactory(),
+            new InMemoryProxyConfigProvider(),
+            certificateService,
+            options,
+            hostEnvironment,
+            new AdminAccessService(options),
+            selfUpdateService);
+
+        await configurationService.InitializeAsync(CancellationToken.None);
+        await configurationService.SaveConfigurationAsync(
+            new HelgrindConfigurationDto
+            {
+                Routes =
+                [
+                    new RouteDto
+                    {
+                        RouteId = "route-keep",
+                        ClusterId = "cluster-keep",
+                        Path = "/keep/{**catch-all}",
+                        Hosts = ["keep.example.com"],
+                    },
+                    new RouteDto
+                    {
+                        RouteId = "route-delete",
+                        ClusterId = "cluster-delete",
+                        Path = "/delete/{**catch-all}",
+                        Hosts = ["delete.example.com"],
+                    }
+                ],
+                Clusters =
+                [
+                    new ClusterDto
+                    {
+                        ClusterId = "cluster-keep",
+                        Destinations =
+                        [
+                            new DestinationDto
+                            {
+                                DestinationId = "destination-keep",
+                                Address = "https://backend-keep.internal:5001"
+                            }
+                        ]
+                    },
+                    new ClusterDto
+                    {
+                        ClusterId = "cluster-delete",
+                        Destinations =
+                        [
+                            new DestinationDto
+                            {
+                                DestinationId = "destination-delete",
+                                Address = "https://backend-delete.internal:5002"
+                            }
+                        ]
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        await configurationService.SaveConfigurationAsync(
+            new HelgrindConfigurationDto
+            {
+                Routes =
+                [
+                    new RouteDto
+                    {
+                        RouteId = "route-keep",
+                        ClusterId = "cluster-keep",
+                        Path = "/keep/{**catch-all}",
+                        Hosts = ["keep.example.com"],
+                    }
+                ],
+                Clusters =
+                [
+                    new ClusterDto
+                    {
+                        ClusterId = "cluster-keep",
+                        Destinations =
+                        [
+                            new DestinationDto
+                            {
+                                DestinationId = "destination-keep",
+                                Address = "https://backend-keep.internal:5001"
+                            }
+                        ]
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        var configuration = await configurationService.GetConfigurationAsync(CancellationToken.None);
+
+        var route = Assert.Single(configuration.Routes);
+        Assert.Equal("route-keep", route.RouteId);
+        var cluster = Assert.Single(configuration.Clusters);
+        Assert.Equal("cluster-keep", cluster.ClusterId);
+        Assert.DoesNotContain(configuration.Routes, item => item.RouteId == "route-delete");
+        Assert.DoesNotContain(configuration.Clusters, item => item.ClusterId == "cluster-delete");
+        Assert.DoesNotContain(dbContext.Routes, item => item.RouteId == "route-delete");
+        Assert.DoesNotContain(dbContext.Clusters, item => item.ClusterId == "cluster-delete");
+        Assert.DoesNotContain(dbContext.Destinations, item => item.ClusterId == "cluster-delete");
+    }
+
+    [Fact]
     public async Task SaveConfigurationAsync_RejectsReplacingPopulatedConfigurationWithEmptyDraft()
     {
         await using var dbContext = CreateDbContext();
