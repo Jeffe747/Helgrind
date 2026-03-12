@@ -1164,12 +1164,8 @@ function setStatus(message) {
     elements.statusToast.dataset.tone = presentation.tone;
     elements.statusToast.classList.remove("hidden", "pinned");
     elements.statusToast.innerHTML = `
-        <div class="feedback-strip-body">
-            <strong class="feedback-strip-title">${escapeHtml(presentation.title)}</strong>
-            <span class="feedback-strip-message">${escapeHtml(message)}</span>
-            <span class="feedback-strip-hint">Hover to keep. Click to dismiss.</span>
-        </div>
-        <div class="feedback-strip-progress"></div>`;
+        <div class="feedback-toast-body">${escapeHtml(message)}</div>
+        <div class="feedback-toast-progress"></div>`;
     scheduleStatusToastHide(getStatusToastDuration());
 }
 
