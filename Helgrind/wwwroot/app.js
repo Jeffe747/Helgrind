@@ -380,8 +380,10 @@ async function saveConfiguration(allowEmpty = false) {
     render();
 
     if (expectedRouteAllowlistById.size > 0 && backendDroppedRouteAllowlists(rawConfiguration, expectedRouteAllowlistById)) {
-        setStatus("The running Helgrind backend did not persist route allowlists. Restart or redeploy Helgrind so the new backend code and database schema are loaded.");
+        return "The running Helgrind backend did not persist route allowlists. Restart or redeploy Helgrind so the new backend code and database schema are loaded.";
     }
+
+    return "";
 }
 
 function backendDroppedRouteAllowlists(configuration, expectedRouteAllowlistById) {
@@ -397,14 +399,14 @@ function backendDroppedRouteAllowlists(configuration, expectedRouteAllowlistById
 }
 
 async function saveAndApplyConfiguration(statusPrefix, selectionToRestore = state.selected ? { ...state.selected } : null, allowEmpty = false) {
-    await saveConfiguration(allowEmpty);
+    const compatibilityWarning = await saveConfiguration(allowEmpty);
 
     const response = await fetch("/api/admin/apply", { method: "POST" });
     const result = await response.json();
     const message = result.validationErrors?.length
         ? `${statusPrefix} ${result.statusMessage} ${result.validationErrors.join(" ")}`
         : `${statusPrefix} ${result.statusMessage}`;
-    setStatus(message);
+    setStatus(compatibilityWarning ? `${message} ${compatibilityWarning}` : message);
     await loadConfiguration(selectionToRestore);
 }
 
