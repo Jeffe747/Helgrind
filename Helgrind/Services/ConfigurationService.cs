@@ -499,15 +499,16 @@ ORDER BY array_position(index_definition.indkey, attribute.attnum);";
         settings.LastAppliedUtc = DateTimeOffset.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        var activeCertificate = await certificateService.GetActiveCertificateMetadataAsync(cancellationToken);
+        var certificateRestartRequired = certificateService.RequiresRestart(activeCertificate);
+
         return new ApplyChangesResultDto
         {
             Success = true,
             ProxyConfigApplied = true,
             CertificateReloaded = !certificateService.UsingFallbackCertificate,
-            RequiresRestart = (await certificateService.GetActiveCertificateMetadataAsync(cancellationToken)) is not null,
-            StatusMessage = certificateService.UsingFallbackCertificate
-                ? "Proxy settings applied. Helgrind is still serving the built-in temporary certificate until you upload a PEM and key."
-                : "Proxy settings applied. If you recently replaced the certificate files, restart Helgrind to switch the HTTPS certificate.",
+            RequiresRestart = certificateRestartRequired,
+            StatusMessage = GetApplyStatusMessage(activeCertificate, certificateRestartRequired),
         };
     }
 
@@ -763,5 +764,20 @@ ORDER BY array_position(index_definition.indkey, attribute.attnum);";
         return certificateRestartRequired
             ? "Run the restart helper for your host after replacing the certificate so Kestrel picks up the stored PEM and key."
             : "No restart is currently required for the stored certificate.";
+    }
+
+    private string GetApplyStatusMessage(CertificateMetadataDto? activeCertificate, bool certificateRestartRequired)
+    {
+        if (activeCertificate is null)
+        {
+            return "Proxy settings applied. Helgrind is still serving the built-in temporary certificate until you upload a PEM and key.";
+        }
+
+        if (certificateRestartRequired)
+        {
+            return "Proxy settings applied. Restart Helgrind to switch the public HTTPS certificate to the stored PEM and key.";
+        }
+
+        return "Proxy settings applied.";
     }
 }
