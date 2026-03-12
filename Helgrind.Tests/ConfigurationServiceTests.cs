@@ -304,6 +304,91 @@ public sealed class ConfigurationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ApplyAsync_DoesNotWarnAboutCertificateRestart_WhenCertificateIsStoredButRestartIsStillRequired()
+    {
+        await using var dbContext = CreateDbContext();
+        var hostEnvironment = new TestWebHostEnvironment(_contentRootPath);
+        var options = Microsoft.Extensions.Options.Options.Create(new HelgrindOptions
+        {
+            PublicHttpsPort = 443,
+            AdminHttpsPort = 8444,
+            DatabasePath = "App_Data/helgrind.db",
+            CertificateStoragePath = "App_Data/certificates"
+        });
+        var runtimeState = new CertificateRuntimeState();
+        var certificateService = new CertificateService(dbContext, runtimeState, hostEnvironment, options);
+        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, NullLogger<SelfUpdateService>.Instance);
+        var configurationService = new ConfigurationService(
+            dbContext,
+            new ProxyConfigFactory(),
+            new InMemoryProxyConfigProvider(),
+            certificateService,
+            options,
+            hostEnvironment,
+            new AdminAccessService(options),
+            selfUpdateService);
+
+        await configurationService.InitializeAsync(CancellationToken.None);
+
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=helgrind-tests-pending", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        dbContext.Certificates.Add(new StoredCertificateEntity
+        {
+            Id = Guid.NewGuid(),
+            DisplayName = "test-cert-pending",
+            Thumbprint = certificate.Thumbprint,
+            PemFilePath = Path.Combine(_contentRootPath, "certificate-pending.pem"),
+            KeyFilePath = Path.Combine(_contentRootPath, "certificate-pending.key"),
+            OriginalPemFileName = "certificate-pending.pem",
+            OriginalKeyFileName = "certificate-pending.key",
+            UploadedUtc = DateTimeOffset.UtcNow,
+            IsActive = true,
+        });
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        await configurationService.SaveConfigurationAsync(
+            new HelgrindConfigurationDto
+            {
+                Routes =
+                [
+                    new RouteDto
+                    {
+                        RouteId = "route1",
+                        ClusterId = "cluster1",
+                        Path = "{**catch-all}",
+                        Hosts = ["api.example.com"]
+                    }
+                ],
+                Clusters =
+                [
+                    new ClusterDto
+                    {
+                        ClusterId = "cluster1",
+                        Destinations =
+                        [
+                            new DestinationDto
+                            {
+                                DestinationId = "destination1",
+                                Address = "https://backend.internal:5001"
+                            }
+                        ]
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        var result = await configurationService.ApplyAsync(CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.True(result.RequiresRestart);
+        Assert.Equal("Proxy settings applied.", result.StatusMessage);
+    }
+
+    [Fact]
     public void Normalize_TrimsAndDeduplicatesRouteHosts()
     {
         var normalized = ConfigurationService.Normalize(new HelgrindConfigurationDto

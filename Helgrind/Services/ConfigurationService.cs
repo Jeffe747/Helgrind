@@ -508,7 +508,7 @@ ORDER BY array_position(index_definition.indkey, attribute.attnum);";
             ProxyConfigApplied = true,
             CertificateReloaded = !certificateService.UsingFallbackCertificate,
             RequiresRestart = certificateRestartRequired,
-            StatusMessage = GetApplyStatusMessage(activeCertificate, certificateRestartRequired),
+            StatusMessage = GetApplyStatusMessage(activeCertificate),
         };
     }
 
@@ -766,16 +766,11 @@ ORDER BY array_position(index_definition.indkey, attribute.attnum);";
             : "No restart is currently required for the stored certificate.";
     }
 
-    private string GetApplyStatusMessage(CertificateMetadataDto? activeCertificate, bool certificateRestartRequired)
+    private static string GetApplyStatusMessage(CertificateMetadataDto? activeCertificate)
     {
         if (activeCertificate is null)
         {
             return "Proxy settings applied. Helgrind is still serving the built-in temporary certificate until you upload a PEM and key.";
-        }
-
-        if (certificateRestartRequired)
-        {
-            return "Proxy settings applied. Restart Helgrind to switch the public HTTPS certificate to the stored PEM and key.";
         }
 
         return "Proxy settings applied.";
