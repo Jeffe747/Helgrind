@@ -22,7 +22,14 @@ namespace Helgrind
             IPNetwork.Parse("188.114.96.0/20"),
             IPNetwork.Parse("190.93.240.0/20"),
             IPNetwork.Parse("197.234.240.0/22"),
-            IPNetwork.Parse("198.41.128.0/17")
+            IPNetwork.Parse("198.41.128.0/17"),
+            IPNetwork.Parse("2400:cb00::/32"),
+            IPNetwork.Parse("2606:4700::/32"),
+            IPNetwork.Parse("2803:f800::/32"),
+            IPNetwork.Parse("2405:b500::/32"),
+            IPNetwork.Parse("2405:8100::/32"),
+            IPNetwork.Parse("2a06:98c0::/29"),
+            IPNetwork.Parse("2c0f:f248::/32")
         };
     }
 }
