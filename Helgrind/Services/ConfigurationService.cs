@@ -416,11 +416,11 @@ ORDER BY array_position(index_definition.indkey, attribute.attnum);";
         };
     }
 
-    public async Task SaveConfigurationAsync(HelgrindConfigurationDto configuration, CancellationToken cancellationToken)
+    public async Task SaveConfigurationAsync(HelgrindConfigurationDto configuration, CancellationToken cancellationToken, bool allowEmpty = false)
     {
         var normalized = Normalize(configuration);
 
-        if (normalized.Routes.Count == 0 && normalized.Clusters.Count == 0)
+        if (!allowEmpty && normalized.Routes.Count == 0 && normalized.Clusters.Count == 0)
         {
             var hasExistingConfiguration = await dbContext.Routes.AnyAsync(cancellationToken)
                 || await dbContext.Clusters.AnyAsync(cancellationToken);

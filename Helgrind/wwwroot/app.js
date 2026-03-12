@@ -169,7 +169,7 @@ document.getElementById("delete-selected").addEventListener("click", async () =>
         state.selected = null;
         render();
 
-        await saveAndApplyConfiguration(deletingRoute ? "Route deleted." : "Cluster deleted.", null);
+        await saveAndApplyConfiguration(deletingRoute ? "Route deleted." : "Cluster deleted.", null, true);
     } catch (error) {
         state.configuration = previousConfiguration;
         captureSavedDraftSnapshots();
@@ -362,8 +362,8 @@ async function runTelemetrySmokeTest() {
     }, 800);
 }
 
-async function saveConfiguration() {
-    const response = await fetch("/api/admin/configuration", {
+async function saveConfiguration(allowEmpty = false) {
+    const response = await fetch(`/api/admin/configuration${allowEmpty ? "?allowEmpty=true" : ""}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(state.configuration),
@@ -381,8 +381,8 @@ async function saveConfiguration() {
     render();
 }
 
-async function saveAndApplyConfiguration(statusPrefix, selectionToRestore = state.selected ? { ...state.selected } : null) {
-    await saveConfiguration();
+async function saveAndApplyConfiguration(statusPrefix, selectionToRestore = state.selected ? { ...state.selected } : null, allowEmpty = false) {
+    await saveConfiguration(allowEmpty);
 
     const response = await fetch("/api/admin/apply", { method: "POST" });
     const result = await response.json();
