@@ -15,11 +15,11 @@ public static class ManagementEndpoints
         group.MapGet("/status", async (ConfigurationService configurationService, CancellationToken cancellationToken) =>
             Results.Ok(await configurationService.GetAdminHealthStatusAsync(cancellationToken)));
 
-        group.MapPut("/configuration", async (HelgrindConfigurationDto configuration, bool allowEmpty, ConfigurationService configurationService, CancellationToken cancellationToken) =>
+        group.MapPut("/configuration", async (HelgrindConfigurationDto configuration, bool? allowEmpty, ConfigurationService configurationService, CancellationToken cancellationToken) =>
         {
             try
             {
-                await configurationService.SaveConfigurationAsync(configuration, cancellationToken, allowEmpty);
+                await configurationService.SaveConfigurationAsync(configuration, cancellationToken, allowEmpty ?? false);
                 return Results.Ok(await configurationService.GetConfigurationAsync(cancellationToken));
             }
             catch (InvalidOperationException exception)
