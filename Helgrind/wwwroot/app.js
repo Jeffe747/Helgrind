@@ -133,32 +133,52 @@ document.getElementById("add-cluster").addEventListener("click", () => {
     render();
 });
 
-document.getElementById("delete-selected").addEventListener("click", () => {
+document.getElementById("delete-selected").addEventListener("click", async () => {
     if (!state.selected) {
         return;
     }
 
-    if (state.selected.type === "route") {
-        const route = getSelectedRoute();
-        if (route) {
-            markDraftDeleted("route", route);
-        }
-        state.configuration.routes = state.configuration.routes.filter(route => route.routeId !== state.selected.id);
-    } else {
-        const cluster = getSelectedCluster();
-        if (cluster) {
-            markDraftDeleted("cluster", cluster);
+    const deleteButton = document.getElementById("delete-selected");
+    const previousConfiguration = cloneConfiguration(state.configuration);
+    const previousSelection = state.selected ? { ...state.selected } : null;
+    const deletingRoute = state.selected.type === "route";
+
+    deleteButton.disabled = true;
+
+    try {
+        if (deletingRoute) {
+            const route = getSelectedRoute();
+            if (route) {
+                markDraftDeleted("route", route);
+            }
+
+            state.configuration.routes = state.configuration.routes.filter(route => route.routeId !== state.selected.id);
+        } else {
+            const cluster = getSelectedCluster();
+            if (cluster) {
+                markDraftDeleted("cluster", cluster);
+            }
+
+            state.configuration.routes
+                .filter(route => route.clusterId === state.selected.id)
+                .forEach(route => markDraftDeleted("route", route));
+            state.configuration.clusters = state.configuration.clusters.filter(cluster => cluster.clusterId !== state.selected.id);
+            state.configuration.routes = state.configuration.routes.filter(route => route.clusterId !== state.selected.id);
         }
 
-        state.configuration.routes
-            .filter(route => route.clusterId === state.selected.id)
-            .forEach(route => markDraftDeleted("route", route));
-        state.configuration.clusters = state.configuration.clusters.filter(cluster => cluster.clusterId !== state.selected.id);
-        state.configuration.routes = state.configuration.routes.filter(route => route.clusterId !== state.selected.id);
+        state.selected = null;
+        render();
+
+        await saveAndApplyConfiguration(deletingRoute ? "Route deleted." : "Cluster deleted.", null);
+    } catch (error) {
+        state.configuration = previousConfiguration;
+        captureSavedDraftSnapshots();
+        state.selected = previousSelection;
+        render();
+        setStatus(`Could not delete ${deletingRoute ? "route" : "cluster"}: ${error.message}`);
+    } finally {
+        deleteButton.disabled = false;
     }
-
-    state.selected = null;
-    render();
 });
 
 document.getElementById("export-config").addEventListener("click", exportConfiguration);
@@ -377,7 +397,12 @@ async function saveSelectedConfiguration(event, kind) {
     event.preventDefault();
     const selection = state.selected ? { ...state.selected } : null;
     const label = kind === "route" ? "Route saved." : "Cluster saved.";
-    await saveAndApplyConfiguration(label, selection);
+
+    try {
+        await saveAndApplyConfiguration(label, selection);
+    } catch (error) {
+        setStatus(`Could not save ${kind}: ${error.message}`);
+    }
 }
 
 async function exportConfiguration() {
@@ -1112,6 +1137,14 @@ function buildDefaultDestinationId(cluster) {
     }
 
     return candidate;
+}
+
+function cloneConfiguration(configuration) {
+    if (typeof structuredClone === "function") {
+        return structuredClone(configuration);
+    }
+
+    return JSON.parse(JSON.stringify(configuration));
 }
 
 function getSelectedRoute() {
