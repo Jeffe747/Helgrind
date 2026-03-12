@@ -126,6 +126,65 @@ public sealed class HelgrindDatabaseConfigurationTests : IDisposable
         Assert.Equal(expectedThumbprint, runtimeState.CurrentThumbprint);
     }
 
+    [Fact]
+    public void TryLoadStartupCertificate_LoadsActiveCertificate_FromCurrentCertificateRoot_WhenStoredPathsAreStale()
+    {
+        var certificateId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var options = new HelgrindOptions
+        {
+            DatabasePath = Path.Combine("App_Data", "helgrind.db"),
+            CertificateStoragePath = Path.Combine("App_Data", "certificates")
+        };
+        var sqlitePath = HelgrindDatabaseConfiguration.ResolveSqliteDatabasePath(_contentRootPath, options);
+        Directory.CreateDirectory(Path.GetDirectoryName(sqlitePath)!);
+
+        var certificateDirectory = CertificatePathResolver.GetCertificateDirectory(_contentRootPath, options, certificateId);
+        Directory.CreateDirectory(certificateDirectory);
+        var pemPath = Path.Combine(certificateDirectory, "certificate.pem");
+        var keyPath = Path.Combine(certificateDirectory, "certificate.key");
+        var expectedThumbprint = WriteTestCertificateFiles(pemPath, keyPath);
+
+        using (var connection = new SqliteConnection($"Data Source={sqlitePath}"))
+        {
+            connection.Open();
+
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                CREATE TABLE Certificates (
+                    Id TEXT NOT NULL PRIMARY KEY,
+                    DisplayName TEXT NOT NULL,
+                    Thumbprint TEXT NOT NULL,
+                    PemFilePath TEXT NOT NULL,
+                    KeyFilePath TEXT NOT NULL,
+                    OriginalPemFileName TEXT NOT NULL,
+                    OriginalKeyFileName TEXT NOT NULL,
+                    UploadedUtc TEXT NOT NULL,
+                    IsActive INTEGER NOT NULL
+                );
+                INSERT INTO Certificates (Id, DisplayName, Thumbprint, PemFilePath, KeyFilePath, OriginalPemFileName, OriginalKeyFileName, UploadedUtc, IsActive)
+                VALUES (@id, 'test-cert', @thumbprint, '/stale/path/certificate.pem', '/stale/path/certificate.key', 'certificate.pem', 'certificate.key', '2026-03-12T00:00:00+00:00', 1);";
+            command.Parameters.AddWithValue("@id", certificateId.ToString());
+            command.Parameters.AddWithValue("@thumbprint", expectedThumbprint);
+            command.ExecuteNonQuery();
+        }
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:Provider"] = "Sqlite",
+                ["Helgrind:DatabasePath"] = options.DatabasePath,
+                ["Helgrind:CertificateStoragePath"] = options.CertificateStoragePath,
+            })
+            .Build();
+
+        var runtimeState = new CertificateRuntimeState();
+
+        HelgrindDatabaseConfiguration.TryLoadStartupCertificate(configuration, _contentRootPath, options, runtimeState);
+
+        Assert.False(runtimeState.UsingFallbackCertificate);
+        Assert.Equal(expectedThumbprint, runtimeState.CurrentThumbprint);
+    }
+
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();

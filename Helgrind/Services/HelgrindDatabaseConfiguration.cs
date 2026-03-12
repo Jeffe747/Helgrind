@@ -98,8 +98,8 @@ internal static class HelgrindDatabaseConfiguration
             using var command = connection.CreateCommand();
             command.CommandText = provider switch
             {
-                HelgrindDatabaseProvider.PostgreSql => "SELECT \"PemFilePath\", \"KeyFilePath\" FROM \"Certificates\" WHERE \"IsActive\" = TRUE LIMIT 1",
-                _ => "SELECT \"PemFilePath\", \"KeyFilePath\" FROM \"Certificates\" WHERE \"IsActive\" = 1 LIMIT 1"
+                HelgrindDatabaseProvider.PostgreSql => "SELECT \"Id\", \"PemFilePath\", \"KeyFilePath\" FROM \"Certificates\" WHERE \"IsActive\" = TRUE LIMIT 1",
+                _ => "SELECT \"Id\", \"PemFilePath\", \"KeyFilePath\" FROM \"Certificates\" WHERE \"IsActive\" = 1 LIMIT 1"
             };
 
             using var reader = command.ExecuteReader();
@@ -108,14 +108,22 @@ internal static class HelgrindDatabaseConfiguration
                 return;
             }
 
-            var pemFilePath = reader.GetString(0);
-            var keyFilePath = reader.GetString(1);
-            if (!File.Exists(pemFilePath) || !File.Exists(keyFilePath))
+            var certificateId = reader.GetGuid(0);
+            var pemFilePath = reader.GetString(1);
+            var keyFilePath = reader.GetString(2);
+            if (!CertificatePathResolver.TryResolveStoredCertificatePaths(
+                contentRootPath,
+                options,
+                certificateId,
+                pemFilePath,
+                keyFilePath,
+                out var resolvedPemPath,
+                out var resolvedKeyPath))
             {
                 return;
             }
 
-            using var certificate = X509Certificate2.CreateFromPemFile(pemFilePath, keyFilePath);
+            using var certificate = X509Certificate2.CreateFromPemFile(resolvedPemPath, resolvedKeyPath);
             runtimeState.SetActiveCertificate(certificate);
         }
         catch (DbException)

@@ -18,7 +18,6 @@ public sealed class CertificateService(
         Directory.CreateDirectory(GetCertificateRoot());
 
         var activeCertificate = await dbContext.Certificates
-            .AsNoTracking()
             .SingleOrDefaultAsync(certificate => certificate.IsActive, cancellationToken);
 
         if (activeCertificate is null)
@@ -27,13 +26,28 @@ public sealed class CertificateService(
             return;
         }
 
-        if (!File.Exists(activeCertificate.PemFilePath) || !File.Exists(activeCertificate.KeyFilePath))
+        if (!CertificatePathResolver.TryResolveStoredCertificatePaths(
+            environment.ContentRootPath,
+            options.Value,
+            activeCertificate.Id,
+            activeCertificate.PemFilePath,
+            activeCertificate.KeyFilePath,
+            out var pemPath,
+            out var keyPath))
         {
             runtimeState.ClearActiveCertificate();
             return;
         }
 
-        using var certificate = X509Certificate2.CreateFromPemFile(activeCertificate.PemFilePath, activeCertificate.KeyFilePath);
+        if (!string.Equals(activeCertificate.PemFilePath, pemPath, StringComparison.Ordinal)
+            || !string.Equals(activeCertificate.KeyFilePath, keyPath, StringComparison.Ordinal))
+        {
+            activeCertificate.PemFilePath = pemPath;
+            activeCertificate.KeyFilePath = keyPath;
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        using var certificate = X509Certificate2.CreateFromPemFile(pemPath, keyPath);
         runtimeState.SetActiveCertificate(certificate);
     }
 
@@ -83,7 +97,7 @@ public sealed class CertificateService(
         }
 
         var certificateId = Guid.NewGuid();
-        var certificateDirectory = Path.Combine(GetCertificateRoot(), certificateId.ToString("N"));
+        var certificateDirectory = CertificatePathResolver.GetCertificateDirectory(environment.ContentRootPath, options.Value, certificateId);
         Directory.CreateDirectory(certificateDirectory);
 
         var pemPath = Path.Combine(certificateDirectory, "certificate.pem");
@@ -146,7 +160,7 @@ public sealed class CertificateService(
         };
     }
 
-    private string GetCertificateRoot() => Path.Combine(environment.ContentRootPath, options.Value.CertificateStoragePath);
+    private string GetCertificateRoot() => CertificatePathResolver.GetCertificateRoot(environment.ContentRootPath, options.Value);
 
     private static CertificateMetadataDto ToMetadata(StoredCertificateEntity entity) => new()
     {
