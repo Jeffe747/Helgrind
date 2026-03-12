@@ -61,7 +61,7 @@ Helgrind still stores uploaded certificate files on disk, so `Helgrind__Certific
 dotnet run --project Helgrind/Helgrind.csproj
 ```
 
-Dev ports: admin `9443`, public `8443`.
+Dev ports: admin `8444`, public `8443`.
 
 ## 🛠 Troubleshooting
 
