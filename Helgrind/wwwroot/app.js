@@ -352,6 +352,8 @@ async function runTelemetrySmokeTest() {
 }
 
 async function saveConfiguration(allowEmpty = false) {
+    state.configuration = sanitizeConfigurationForSave(state.configuration);
+
     const response = await fetch(`/api/admin/configuration${allowEmpty ? "?allowEmpty=true" : ""}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -491,7 +493,7 @@ function bindRouteEditor() {
                 .split(/\r?\n|,/)
                 .map(host => host.trim())
                 .filter(Boolean);
-            route.order = Number.parseInt(document.getElementById("route-order").value || "0", 10);
+            route.order = parseIntegerOrDefault(document.getElementById("route-order").value, 0);
             state.selected.id = route.routeId;
             renderDraftState();
         });
@@ -1126,6 +1128,49 @@ function buildDefaultDestinationId(cluster) {
     }
 
     return candidate;
+}
+
+function parseIntegerOrDefault(value, defaultValue) {
+    const parsedValue = Number.parseInt(value ?? "", 10);
+    return Number.isFinite(parsedValue) ? parsedValue : defaultValue;
+}
+
+function sanitizeConfigurationForSave(configuration) {
+    const nextConfiguration = cloneConfiguration(configuration);
+
+    nextConfiguration.routes = (nextConfiguration.routes || []).map(route => ({
+        ...route,
+        routeId: route.routeId || "",
+        clusterId: route.clusterId || "",
+        path: route.path || "{**catch-all}",
+        hosts: Array.isArray(route.hosts) ? route.hosts : [],
+        order: Number.isFinite(route.order) ? route.order : 0,
+    }));
+
+    nextConfiguration.clusters = (nextConfiguration.clusters || []).map(cluster => ({
+        ...cluster,
+        clusterId: cluster.clusterId || "",
+        loadBalancingPolicy: cluster.loadBalancingPolicy || "",
+        healthCheck: {
+            enabled: !!cluster.healthCheck?.enabled,
+            interval: cluster.healthCheck?.interval || "00:00:10",
+            timeout: cluster.healthCheck?.timeout || "00:00:03",
+            policy: cluster.healthCheck?.policy || "ConsecutiveFailures",
+            path: cluster.healthCheck?.path || "",
+            query: cluster.healthCheck?.query || "",
+        },
+        consecutiveFailuresThreshold: Number.isFinite(cluster.consecutiveFailuresThreshold)
+            ? cluster.consecutiveFailuresThreshold
+            : null,
+        destinations: (cluster.destinations || []).map(destination => ({
+            ...destination,
+            destinationId: destination.destinationId || "",
+            address: destination.address || "",
+        })),
+    }));
+
+    nextConfiguration.settings ??= {};
+    return nextConfiguration;
 }
 
 function cloneConfiguration(configuration) {

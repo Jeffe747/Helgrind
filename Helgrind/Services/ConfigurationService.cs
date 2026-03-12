@@ -467,7 +467,7 @@ ORDER BY array_position(index_definition.indkey, attribute.attnum);";
                 ClusterId = route.ClusterId,
                 Path = route.Path,
                 HostsJson = JsonSerializer.Serialize(route.Hosts, JsonOptions),
-                Order = route.Order,
+                Order = route.Order ?? 0,
             });
         }
 
@@ -562,7 +562,7 @@ ORDER BY array_position(index_definition.indkey, attribute.attnum);";
                         .Where(host => !string.IsNullOrWhiteSpace(host))
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList(),
-                    Order = route.Order,
+                    Order = route.Order ?? 0,
                 })
                 .OrderBy(route => route.RouteId, StringComparer.OrdinalIgnoreCase)
                 .ToList(),

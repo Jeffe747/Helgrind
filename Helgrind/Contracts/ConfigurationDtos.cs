@@ -19,7 +19,7 @@ public sealed class RouteDto
 
     public List<string> Hosts { get; set; } = [];
 
-    public int Order { get; set; }
+    public int? Order { get; set; }
 }
 
 public sealed class ClusterDto

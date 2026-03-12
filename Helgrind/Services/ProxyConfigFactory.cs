@@ -118,7 +118,7 @@ public sealed class ProxyConfigFactory
             {
                 RouteId = route.RouteId,
                 ClusterId = route.ClusterId,
-                Order = route.Order,
+                Order = route.Order ?? 0,
                 Match = new RouteMatch
                 {
                     Hosts = route.Hosts,

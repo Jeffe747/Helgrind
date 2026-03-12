@@ -110,6 +110,27 @@ public sealed class ConfigurationServiceTests : IDisposable
     }
 
     [Fact]
+    public void Normalize_DefaultsNullRouteOrderToZero()
+    {
+        var normalized = ConfigurationService.Normalize(new HelgrindConfigurationDto
+        {
+            Routes =
+            [
+                new RouteDto
+                {
+                    RouteId = "route1",
+                    ClusterId = "cluster1",
+                    Hosts = ["api.example.com"],
+                    Order = null,
+                }
+            ]
+        });
+
+        Assert.Single(normalized.Routes);
+        Assert.Equal(0, normalized.Routes[0].Order);
+    }
+
+    [Fact]
     public async Task GetAdminHealthStatusAsync_ReturnsListenerAndRouteSummary()
     {
         await using var dbContext = CreateDbContext();
