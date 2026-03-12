@@ -51,10 +51,6 @@ const elements = {
     template: document.getElementById("destination-row-template"),
     headerVersion: document.getElementById("header-version"),
     statusToast: document.getElementById("status-toast"),
-    statusToastTitle: document.getElementById("status-toast-title"),
-    statusToastMessage: document.getElementById("status-toast-message"),
-    statusToastHint: document.getElementById("status-toast-hint"),
-    statusToastClose: document.getElementById("status-toast-close"),
     publicHttpsEndpoint: document.getElementById("public-https-endpoint"),
     environmentName: document.getElementById("environment-name"),
     certificateState: document.getElementById("certificate-state"),
@@ -244,14 +240,7 @@ document.getElementById("certificate-form").addEventListener("submit", uploadCer
 document.getElementById("route-editor").addEventListener("submit", event => saveSelectedConfiguration(event, "route"));
 document.getElementById("cluster-editor").addEventListener("submit", event => saveSelectedConfiguration(event, "cluster"));
 elements.statusToast.addEventListener("mouseenter", pinStatusToast);
-elements.statusToast.addEventListener("mouseleave", resumeStatusToast);
-elements.statusToast.addEventListener("focusin", pinStatusToast);
-elements.statusToast.addEventListener("focusout", event => {
-    if (!elements.statusToast.contains(event.relatedTarget)) {
-        resumeStatusToast();
-    }
-});
-elements.statusToastClose.addEventListener("click", hideStatusToast);
+elements.statusToast.addEventListener("click", hideStatusToast);
 
 bindRouteEditor();
 bindClusterEditor();
@@ -1173,12 +1162,15 @@ function setStatus(message) {
     clearStatusToastTimer();
     statusToastPinned = false;
     elements.statusToast.dataset.tone = presentation.tone;
-    elements.statusToastTitle.textContent = presentation.title;
-    elements.statusToastMessage.textContent = message;
-    elements.statusToastHint.textContent = "Dismisses automatically unless you hover it.";
     elements.statusToast.classList.remove("hidden", "pinned");
-    elements.statusToast.classList.add("visible");
-    scheduleStatusToastHide(getStatusToastDuration(message));
+    elements.statusToast.innerHTML = `
+        <div class="feedback-strip-body">
+            <strong class="feedback-strip-title">${escapeHtml(presentation.title)}</strong>
+            <span class="feedback-strip-message">${escapeHtml(message)}</span>
+            <span class="feedback-strip-hint">Hover to keep. Click to dismiss.</span>
+        </div>
+        <div class="feedback-strip-progress"></div>`;
+    scheduleStatusToastHide(getStatusToastDuration());
 }
 
 function pinStatusToast() {
@@ -1188,30 +1180,16 @@ function pinStatusToast() {
 
     statusToastPinned = true;
     clearStatusToastTimer();
-    elements.statusToastHint.textContent = "Pinned while hovered or focused. Use Close to dismiss.";
     elements.statusToast.classList.add("pinned");
-}
-
-function resumeStatusToast() {
-    if (elements.statusToast.classList.contains("hidden") || !statusToastPinned) {
-        return;
-    }
-
-    statusToastPinned = false;
-    elements.statusToast.classList.remove("pinned");
-    elements.statusToastHint.textContent = "Dismisses automatically unless you hover it.";
-    scheduleStatusToastHide(1600);
 }
 
 function hideStatusToast() {
     clearStatusToastTimer();
     statusToastPinned = false;
-    elements.statusToast.classList.remove("visible", "pinned");
+    elements.statusToast.classList.remove("pinned");
     elements.statusToast.classList.add("hidden");
     elements.statusToast.dataset.tone = "info";
-    elements.statusToastTitle.textContent = "Status Update";
-    elements.statusToastMessage.textContent = "";
-    elements.statusToastHint.textContent = "Dismisses automatically unless you hover it.";
+    elements.statusToast.innerHTML = "";
 }
 
 function clearStatusToastTimer() {
@@ -1229,8 +1207,8 @@ function scheduleStatusToastHide(duration) {
     }, duration);
 }
 
-function getStatusToastDuration(message) {
-    return Math.max(3200, Math.min(8200, 2600 + (message.length * 22)));
+function getStatusToastDuration() {
+    return 2000;
 }
 
 function describeStatusToast(message) {

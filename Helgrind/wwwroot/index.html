@@ -62,19 +62,7 @@
             <button id="tab-empty" class="view-tab" type="button" aria-selected="false">Telemetry</button>
         </nav>
 
-        <div class="toast-region" aria-live="polite" aria-atomic="true">
-            <div id="status-toast" class="status-toast hidden" role="status" data-tone="info">
-                <span class="status-toast-icon" aria-hidden="true"></span>
-                <div class="status-toast-content">
-                    <div class="status-toast-heading">
-                        <strong id="status-toast-title" class="status-toast-title">Status Update</strong>
-                        <span id="status-toast-hint" class="toast-dismiss">Dismisses automatically unless you hover it.</span>
-                    </div>
-                    <p id="status-toast-message" class="status-toast-message"></p>
-                </div>
-                <button id="status-toast-close" class="status-toast-close" type="button" aria-label="Dismiss status message">Close</button>
-            </div>
-        </div>
+        <div id="status-toast" class="feedback-strip hidden" role="status" data-tone="info" aria-live="polite" aria-atomic="true"></div>
 
         <section id="dashboard-view" class="view-panel active">
             <section class="status-strip">
