@@ -816,20 +816,28 @@ function renderTelemetryEvents(events) {
 
     events.forEach(event => {
         const row = document.createElement("tr");
+        const occurredAt = formatTimestamp(event.occurredUtc, false) || "Unknown";
+        const riskLevel = event.riskLevel || "Low";
+        const remoteAddress = event.remoteAddress || "unknown";
+        const sourceSummary = `${event.method || "GET"} ${String(event.statusCode ?? "")}`.trim();
+        const host = event.host || "unknown";
+        const path = event.path || "/";
+        const category = event.category || "Unknown";
+        const reason = event.reason || "";
         row.innerHTML = `
-            <td>${escapeHtml(formatTimestamp(event.occurredUtc, false) || "Unknown")}</td>
-            <td><span class="telemetry-risk telemetry-risk-${escapeHtml((event.riskLevel || "low").toLowerCase())}">${escapeHtml(event.riskLevel || "Low")}</span></td>
+            <td><span class="telemetry-time" title="${escapeHtml(occurredAt)}">${escapeHtml(occurredAt)}</span></td>
+            <td><span class="telemetry-risk telemetry-risk-${escapeHtml(riskLevel.toLowerCase())}">${escapeHtml(riskLevel)}</span></td>
             <td>
-                <strong>${escapeHtml(event.remoteAddress || "unknown")}</strong>
-                <span>${escapeHtml(event.method || "GET")} ${escapeHtml(String(event.statusCode ?? ""))}</span>
+                <strong class="telemetry-cell-primary" title="${escapeHtml(remoteAddress)}">${escapeHtml(remoteAddress)}</strong>
+                <span class="telemetry-cell-secondary" title="${escapeHtml(sourceSummary)}">${escapeHtml(sourceSummary)}</span>
             </td>
             <td>
-                <strong>${escapeHtml(event.host || "unknown")}</strong>
-                <span>${escapeHtml(event.path || "/")}</span>
+                <strong class="telemetry-cell-primary" title="${escapeHtml(host)}">${escapeHtml(host)}</strong>
+                <span class="telemetry-cell-secondary" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
             </td>
             <td>
-                <strong>${escapeHtml(event.category || "Unknown")}</strong>
-                <span>${escapeHtml(event.reason || "")}</span>
+                <strong class="telemetry-cell-primary" title="${escapeHtml(category)}">${escapeHtml(category)}</strong>
+                <span class="telemetry-cell-secondary" title="${escapeHtml(reason)}">${escapeHtml(reason)}</span>
             </td>`;
         elements.telemetryEventsBody.appendChild(row);
     });

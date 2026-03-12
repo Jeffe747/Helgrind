@@ -220,6 +220,7 @@ select {
 .telemetry-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
 }
 
 .telemetry-table th,
@@ -241,6 +242,26 @@ select {
     letter-spacing: .05em;
 }
 
+.telemetry-table th:nth-child(1),
+.telemetry-table td:nth-child(1) {
+    width: 108px;
+}
+
+.telemetry-table th:nth-child(2),
+.telemetry-table td:nth-child(2) {
+    width: 84px;
+}
+
+.telemetry-table th:nth-child(3),
+.telemetry-table td:nth-child(3) {
+    width: 148px;
+}
+
+.telemetry-table th:nth-child(4),
+.telemetry-table td:nth-child(4) {
+    width: 220px;
+}
+
 .telemetry-table td strong,
 .telemetry-list-item strong,
 .telemetry-trend-item strong {
@@ -258,6 +279,28 @@ select {
 
 .telemetry-empty-row {
     text-align: center;
+}
+
+.telemetry-cell-primary,
+.telemetry-cell-secondary,
+.telemetry-time {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.telemetry-cell-primary,
+.telemetry-time {
+    white-space: nowrap;
+}
+
+.telemetry-cell-secondary {
+    display: -webkit-box;
+    line-height: 1.35;
+    max-height: calc(1.35em * 2);
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
 
 .telemetry-risk {
