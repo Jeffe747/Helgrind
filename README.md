@@ -40,6 +40,19 @@ sudo /bin/bash /opt/helgrind-src/deploy/linux/uninstall.sh
 4. Upload a PEM and key for the HTTPS certificate.
 5. Restart if the dashboard says the certificate is staged but not active yet.
 
+### Database Configuration
+
+Helgrind uses SQLite by default, saving your proxy configuration and telemetry to `App_Data/helgrind.db` (`/var/lib/helgrind/helgrind.db` on Linux installations). 
+
+You can optionally configure Helgrind to use PostgreSQL instead. In the Linux deployment, edit `/etc/helgrind/helgrind.env` and append the following overrides:
+
+```bash
+Helgrind__DatabaseProvider=Postgres
+Helgrind__PostgresConnectionString=Host=localhost;Database=helgrind;Username=postgres;Password=mypassword
+```
+
+Then restart the service: `sudo systemctl restart helgrind`.
+
 ### Quick Start (Dev)
 
 ```powershell

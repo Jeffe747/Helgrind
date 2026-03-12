@@ -45,9 +45,21 @@ builder.Services.AddScoped<TelemetryRetentionService>();
 builder.Services.AddDbContext<HelgrindDbContext>((serviceProvider, options) =>
 {
 	var helgrindOptions = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<HelgrindOptions>>().Value;
-	var databasePath = Path.Combine(builder.Environment.ContentRootPath, helgrindOptions.DatabasePath);
-	Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
-	options.UseSqlite($"Data Source={databasePath}");
+	
+	if (string.Equals(helgrindOptions.DatabaseProvider, "Postgres", StringComparison.OrdinalIgnoreCase))
+	{
+		if (string.IsNullOrWhiteSpace(helgrindOptions.PostgresConnectionString))
+		{
+			throw new InvalidOperationException("PostgresConnectionString must be configured when DatabaseProvider is Postgres.");
+		}
+		options.UseNpgsql(helgrindOptions.PostgresConnectionString);
+	}
+	else
+	{
+		var databasePath = Path.Combine(builder.Environment.ContentRootPath, helgrindOptions.DatabasePath);
+		Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+		options.UseSqlite($"Data Source={databasePath}");
+	}
 });
 builder.Services
 	.AddReverseProxy()
