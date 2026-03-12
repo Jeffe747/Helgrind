@@ -18,6 +18,9 @@ public sealed class HelgrindDbContext(DbContextOptions<HelgrindDbContext> option
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ProxyDestinationEntity>()
+            .HasKey(destination => new { destination.ClusterId, destination.DestinationId });
+
         modelBuilder.Entity<ProxyClusterEntity>()
             .HasMany(cluster => cluster.Destinations)
             .WithOne(destination => destination.Cluster)

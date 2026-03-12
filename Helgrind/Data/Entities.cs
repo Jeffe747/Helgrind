@@ -42,10 +42,9 @@ public sealed class ProxyClusterEntity
 
 public sealed class ProxyDestinationEntity
 {
-    [Key]
-    public string DestinationId { get; set; } = string.Empty;
-
     public string ClusterId { get; set; } = string.Empty;
+
+    public string DestinationId { get; set; } = string.Empty;
 
     public string Address { get; set; } = string.Empty;
 

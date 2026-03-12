@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Data;
 using Helgrind.Contracts;
 using Helgrind.Data;
 using Helgrind.Options;
@@ -83,9 +84,10 @@ public sealed class ConfigurationService(
 
             await dbContext.Database.ExecuteSqlRawAsync(
                 @"CREATE TABLE IF NOT EXISTS ""Destinations"" (
-                    ""DestinationId"" text PRIMARY KEY,
                     ""ClusterId"" text NOT NULL,
+                    ""DestinationId"" text NOT NULL,
                     ""Address"" text NOT NULL,
+                    CONSTRAINT ""PK_Destinations"" PRIMARY KEY (""ClusterId"", ""DestinationId""),
                     CONSTRAINT ""FK_Destinations_Clusters_ClusterId"" FOREIGN KEY (""ClusterId"") REFERENCES ""Clusters"" (""ClusterId"") ON DELETE CASCADE
                 );",
                 cancellationToken);
@@ -131,6 +133,8 @@ public sealed class ConfigurationService(
             await dbContext.Database.ExecuteSqlRawAsync(
                 @"CREATE INDEX IF NOT EXISTS ""IX_Destinations_ClusterId"" ON ""Destinations"" (""ClusterId"");",
                 cancellationToken);
+
+            await EnsureDestinationKeysAreClusterScopedAsync(cancellationToken);
             return;
         }
 
@@ -164,6 +168,116 @@ public sealed class ConfigurationService(
             cancellationToken);
         await dbContext.Database.ExecuteSqlRawAsync(
             @"CREATE INDEX IF NOT EXISTS ""IX_SuspiciousRequestEvents_RiskScore"" ON ""SuspiciousRequestEvents"" (""RiskScore"");",
+            cancellationToken);
+
+        await EnsureDestinationKeysAreClusterScopedAsync(cancellationToken);
+    }
+
+    private async Task EnsureDestinationKeysAreClusterScopedAsync(CancellationToken cancellationToken)
+    {
+        var connection = dbContext.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        if (dbContext.Database.IsNpgsql())
+        {
+            var keyColumns = new List<string>();
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = @"
+SELECT attribute.attname
+FROM pg_index index_definition
+JOIN pg_class table_definition ON table_definition.oid = index_definition.indrelid
+JOIN pg_namespace schema_definition ON schema_definition.oid = table_definition.relnamespace
+JOIN pg_attribute attribute ON attribute.attrelid = table_definition.oid AND attribute.attnum = ANY(index_definition.indkey)
+WHERE table_definition.relname = 'Destinations'
+  AND schema_definition.nspname = current_schema()
+  AND index_definition.indisprimary
+ORDER BY array_position(index_definition.indkey, attribute.attnum);";
+
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    keyColumns.Add(reader.GetString(0));
+                }
+            }
+
+            if (keyColumns.SequenceEqual(["ClusterId", "DestinationId"], StringComparer.Ordinal))
+            {
+                return;
+            }
+
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Destinations"" RENAME TO ""Destinations_OldKey"";",
+                cancellationToken);
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"CREATE TABLE ""Destinations"" (
+                    ""ClusterId"" text NOT NULL,
+                    ""DestinationId"" text NOT NULL,
+                    ""Address"" text NOT NULL,
+                    CONSTRAINT ""PK_Destinations"" PRIMARY KEY (""ClusterId"", ""DestinationId""),
+                    CONSTRAINT ""FK_Destinations_Clusters_ClusterId"" FOREIGN KEY (""ClusterId"") REFERENCES ""Clusters"" (""ClusterId"") ON DELETE CASCADE
+                );",
+                cancellationToken);
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"INSERT INTO ""Destinations"" (""ClusterId"", ""DestinationId"", ""Address"")
+                  SELECT ""ClusterId"", ""DestinationId"", ""Address""
+                  FROM ""Destinations_OldKey"";",
+                cancellationToken);
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"DROP TABLE ""Destinations_OldKey"";",
+                cancellationToken);
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"CREATE INDEX IF NOT EXISTS ""IX_Destinations_ClusterId"" ON ""Destinations"" (""ClusterId"");",
+                cancellationToken);
+            return;
+        }
+
+        var sqliteKeyColumns = new List<string>();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "PRAGMA table_info(\"Destinations\")";
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var keyOrder = reader.GetInt32(reader.GetOrdinal("pk"));
+                if (keyOrder > 0)
+                {
+                    sqliteKeyColumns.Add(reader.GetString(reader.GetOrdinal("name")));
+                }
+            }
+        }
+
+        if (sqliteKeyColumns.SequenceEqual(["ClusterId", "DestinationId"], StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"ALTER TABLE ""Destinations"" RENAME TO ""Destinations_OldKey"";",
+            cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"CREATE TABLE ""Destinations"" (
+                ""ClusterId"" TEXT NOT NULL,
+                ""DestinationId"" TEXT NOT NULL,
+                ""Address"" TEXT NOT NULL,
+                CONSTRAINT ""PK_Destinations"" PRIMARY KEY (""ClusterId"", ""DestinationId""),
+                CONSTRAINT ""FK_Destinations_Clusters_ClusterId"" FOREIGN KEY (""ClusterId"") REFERENCES ""Clusters"" (""ClusterId"") ON DELETE CASCADE
+            );",
+            cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"INSERT INTO ""Destinations"" (""ClusterId"", ""DestinationId"", ""Address"")
+              SELECT ""ClusterId"", ""DestinationId"", ""Address""
+              FROM ""Destinations_OldKey"";",
+            cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"DROP TABLE ""Destinations_OldKey"";",
+            cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"CREATE INDEX IF NOT EXISTS ""IX_Destinations_ClusterId"" ON ""Destinations"" (""ClusterId"");",
             cancellationToken);
     }
 

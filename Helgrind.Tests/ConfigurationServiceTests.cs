@@ -322,6 +322,98 @@ public sealed class ConfigurationServiceTests : IDisposable
         Assert.Single(configuration.Clusters);
     }
 
+    [Fact]
+    public async Task SaveConfigurationAsync_AllowsSameDestinationIdAcrossDifferentClusters()
+    {
+        await using var dbContext = CreateDbContext();
+        var hostEnvironment = new TestWebHostEnvironment(_contentRootPath);
+        var options = Microsoft.Extensions.Options.Options.Create(new HelgrindOptions
+        {
+            PublicHttpsPort = 443,
+            AdminHttpsPort = 8444,
+            DatabasePath = "App_Data/helgrind.db",
+            CertificateStoragePath = "App_Data/certificates"
+        });
+        var runtimeState = new CertificateRuntimeState();
+        var certificateService = new CertificateService(dbContext, runtimeState, hostEnvironment, options);
+        var selfUpdateService = new SelfUpdateService(options, hostEnvironment, NullLogger<SelfUpdateService>.Instance);
+        var configurationService = new ConfigurationService(
+            dbContext,
+            new ProxyConfigFactory(),
+            new InMemoryProxyConfigProvider(),
+            certificateService,
+            options,
+            hostEnvironment,
+            new AdminAccessService(options),
+            selfUpdateService);
+
+        await configurationService.InitializeAsync(CancellationToken.None);
+
+        await configurationService.SaveConfigurationAsync(
+            new HelgrindConfigurationDto
+            {
+                Routes =
+                [
+                    new RouteDto
+                    {
+                        RouteId = "route1",
+                        ClusterId = "cluster1",
+                        Path = "{**catch-all}",
+                        Hosts = ["api.example.com"]
+                    },
+                    new RouteDto
+                    {
+                        RouteId = "route2",
+                        ClusterId = "cluster2",
+                        Path = "{**catch-all}",
+                        Hosts = ["www.example.com"]
+                    }
+                ],
+                Clusters =
+                [
+                    new ClusterDto
+                    {
+                        ClusterId = "cluster1",
+                        Destinations =
+                        [
+                            new DestinationDto
+                            {
+                                DestinationId = "destination1",
+                                Address = "https://backend-one.internal:5001"
+                            }
+                        ]
+                    },
+                    new ClusterDto
+                    {
+                        ClusterId = "cluster2",
+                        Destinations =
+                        [
+                            new DestinationDto
+                            {
+                                DestinationId = "destination1",
+                                Address = "https://backend-two.internal:5002"
+                            }
+                        ]
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        var configuration = await configurationService.GetConfigurationAsync(CancellationToken.None);
+
+        Assert.Equal(2, configuration.Clusters.Count);
+        Assert.Equal(2, configuration.Routes.Count);
+        Assert.All(configuration.Clusters, cluster => Assert.Single(cluster.Destinations));
+        Assert.Contains(configuration.Clusters, cluster =>
+            cluster.ClusterId == "cluster1"
+            && cluster.Destinations.Single().DestinationId == "destination1"
+            && cluster.Destinations.Single().Address == "https://backend-one.internal:5001");
+        Assert.Contains(configuration.Clusters, cluster =>
+            cluster.ClusterId == "cluster2"
+            && cluster.Destinations.Single().DestinationId == "destination1"
+            && cluster.Destinations.Single().Address == "https://backend-two.internal:5002");
+    }
+
     public void Dispose()
     {
         _connection.Dispose();

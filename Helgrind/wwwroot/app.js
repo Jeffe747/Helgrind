@@ -122,8 +122,12 @@ document.getElementById("add-cluster").addEventListener("click", () => {
             query: "",
         },
         consecutiveFailuresThreshold: 1,
-        destinations: [{ destinationId: "destination1", address: "https://service.internal:5001" }],
+        destinations: [],
     };
+    nextCluster.destinations.push({
+        destinationId: buildDefaultDestinationId(nextCluster),
+        address: "https://service.internal:5001",
+    });
     state.configuration.clusters.push(nextCluster);
     selectItem("cluster", nextCluster.clusterId);
     render();
@@ -209,7 +213,7 @@ document.getElementById("add-destination").addEventListener("click", () => {
     }
 
     cluster.destinations.push({
-        destinationId: `destination${cluster.destinations.length + 1}`,
+        destinationId: buildDefaultDestinationId(cluster),
         address: "",
     });
     renderDestinationList(cluster);
@@ -1089,6 +1093,25 @@ function buildDirtySummary(dirtyRouteCount, dirtyClusterCount) {
     }
 
     return parts.join(" | ");
+}
+
+function buildDefaultDestinationId(cluster) {
+    const clusterPrefix = (cluster?.clusterId || "cluster")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "cluster";
+    const existingIds = new Set((cluster?.destinations || []).map(destination => (destination.destinationId || "").toLowerCase()));
+
+    let nextNumber = Math.max(1, (cluster?.destinations?.length || 0) + 1);
+    let candidate = `${clusterPrefix}-destination${nextNumber}`;
+
+    while (existingIds.has(candidate.toLowerCase())) {
+        nextNumber += 1;
+        candidate = `${clusterPrefix}-destination${nextNumber}`;
+    }
+
+    return candidate;
 }
 
 function getSelectedRoute() {
