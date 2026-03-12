@@ -90,6 +90,7 @@ const elements = {
     telemetryGraphCopy: document.getElementById("telemetry-graph-copy"),
     telemetryRiskFilter: document.getElementById("telemetry-risk-filter"),
     telemetryCategoryFilter: document.getElementById("telemetry-category-filter"),
+    healthCheckDetailFields: Array.from(document.querySelectorAll(".health-check-grid label:not(.checkbox-row)")),
 };
 
 document.getElementById("add-route").addEventListener("click", () => {
@@ -529,6 +530,7 @@ function bindClusterEditor() {
             const thresholdValue = document.getElementById("health-threshold").value.trim();
             cluster.consecutiveFailuresThreshold = thresholdValue ? Number.parseInt(thresholdValue, 10) : null;
             state.selected.id = cluster.clusterId;
+            updateHealthCheckVisibility(cluster.healthCheck.enabled);
             renderDraftState();
         });
     });
@@ -683,6 +685,7 @@ function renderEditor() {
         document.getElementById("health-path").value = cluster.healthCheck.path || "";
         document.getElementById("health-query").value = cluster.healthCheck.query || "";
         document.getElementById("health-threshold").value = cluster.consecutiveFailuresThreshold ?? "";
+        updateHealthCheckVisibility(cluster.healthCheck.enabled);
         renderDestinationList(cluster);
         updateEditorDraftState();
         return;
@@ -690,7 +693,14 @@ function renderEditor() {
 
     elements.editorTitle.textContent = "Select a route or cluster";
     elements.destinationList.innerHTML = "";
+    updateHealthCheckVisibility(false);
     updateEditorDraftState();
+}
+
+function updateHealthCheckVisibility(isEnabled) {
+    elements.healthCheckDetailFields.forEach(field => {
+        field.classList.toggle("hidden", !isEnabled);
+    });
 }
 
 function renderDestinationList(cluster) {
