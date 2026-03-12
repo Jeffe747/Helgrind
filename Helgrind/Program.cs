@@ -1,3 +1,4 @@
+using Helgrind;
 using Helgrind.Data;
 using Helgrind.Endpoints;
 using Helgrind.Options;
@@ -81,6 +82,20 @@ using (var scope = app.Services.CreateScope())
 }
 
 var helgrindOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<HelgrindOptions>>().Value;
+
+if (YarpConfiguration.AcceptOnlyCloudflareNetwork)
+    app.Use(async (context, next) =>
+    {
+        var remoteIp = context.Connection.RemoteIpAddress;
+        if (remoteIp == null || !YarpConfiguration.CloudflareNetworks.Any(r => r.Contains(remoteIp)))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync("Forbidden");
+            return;
+        }
+
+        await next();
+    });
 
 app.MapWhen(context => context.Connection.LocalPort == helgrindOptions.AdminHttpsPort, adminApp =>
 {
