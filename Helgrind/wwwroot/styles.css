@@ -472,6 +472,12 @@ legend {
     text-overflow: ellipsis;
 }
 
+.header-selection.unsaved {
+    border-color: color-mix(in srgb, var(--status-reconnecting) 58%, var(--border) 42%);
+    background: color-mix(in srgb, var(--bg-pane) 88%, var(--status-reconnecting) 12%);
+    color: color-mix(in srgb, var(--text-main) 82%, var(--status-reconnecting) 18%);
+}
+
 .status {
     display: inline-flex;
     align-items: center;
@@ -929,6 +935,13 @@ button.primary,
     border-color: color-mix(in srgb, var(--status-live) 50%, var(--border));
 }
 
+button.primary.attention,
+.header-button.primary.attention {
+    color: var(--status-reconnecting);
+    border-color: color-mix(in srgb, var(--status-reconnecting) 58%, var(--border) 42%);
+    background: color-mix(in srgb, var(--bg-pane) 82%, var(--status-reconnecting) 18%);
+}
+
 button.danger {
     color: var(--status-error);
 }
@@ -976,16 +989,50 @@ button.small {
 .item-card:hover { background: var(--item-hover); }
 .item-card.selected { background: var(--item-active); }
 
+.item-card.unsaved {
+    background: color-mix(in srgb, var(--bg-pane) 88%, var(--status-reconnecting) 12%);
+    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--status-reconnecting) 72%, transparent 28%);
+}
+
+.item-card.unsaved:hover {
+    background: color-mix(in srgb, var(--item-hover) 82%, var(--status-reconnecting) 18%);
+}
+
+.item-card.unsaved.selected {
+    background: color-mix(in srgb, var(--item-active) 78%, var(--status-reconnecting) 22%);
+}
+
 .item-main {
     min-width: 0;
     display: grid;
     gap: 6px;
 }
 
+.item-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
 .item-main strong {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.dirty-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--status-reconnecting) 56%, transparent 44%);
+    background: color-mix(in srgb, var(--status-reconnecting) 16%, transparent 84%);
+    color: color-mix(in srgb, #ffe4aa 84%, var(--status-reconnecting) 16%);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    flex-shrink: 0;
 }
 
 .item-meta {
@@ -1016,6 +1063,11 @@ button.small {
     border-radius: 10px;
     background: var(--bg-pane);
     box-shadow: var(--shadow-soft);
+}
+
+.editor.editor-unsaved {
+    border-color: color-mix(in srgb, var(--status-reconnecting) 58%, var(--border) 42%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--status-reconnecting) 28%, transparent 72%), var(--shadow-soft);
 }
 
 .editor-actions {

@@ -18,6 +18,19 @@
 let statusToastTimer = null;
 let statusToastPinned = false;
 let telemetryRefreshTimer = null;
+const draftKeyStore = {
+    route: new WeakMap(),
+    cluster: new WeakMap(),
+};
+const savedDraftSnapshots = {
+    route: new Map(),
+    cluster: new Map(),
+};
+const deletedDraftKeys = {
+    route: new Set(),
+    cluster: new Set(),
+};
+let nextDraftKey = 1;
 
 const elements = {
     routeList: document.getElementById("route-list"),
@@ -122,8 +135,20 @@ document.getElementById("delete-selected").addEventListener("click", () => {
     }
 
     if (state.selected.type === "route") {
+        const route = getSelectedRoute();
+        if (route) {
+            markDraftDeleted("route", route);
+        }
         state.configuration.routes = state.configuration.routes.filter(route => route.routeId !== state.selected.id);
     } else {
+        const cluster = getSelectedCluster();
+        if (cluster) {
+            markDraftDeleted("cluster", cluster);
+        }
+
+        state.configuration.routes
+            .filter(route => route.clusterId === state.selected.id)
+            .forEach(route => markDraftDeleted("route", route));
         state.configuration.clusters = state.configuration.clusters.filter(cluster => cluster.clusterId !== state.selected.id);
         state.configuration.routes = state.configuration.routes.filter(route => route.clusterId !== state.selected.id);
     }
@@ -188,6 +213,7 @@ document.getElementById("add-destination").addEventListener("click", () => {
         address: "",
     });
     renderDestinationList(cluster);
+    renderDraftState();
 });
 
 document.getElementById("certificate-form").addEventListener("submit", uploadCertificate);
@@ -220,6 +246,7 @@ async function loadConfiguration(selectionToRestore = null) {
             return;
         }
         state.configuration = await response.json();
+        captureSavedDraftSnapshots();
         state.selected = selectionToRestore;
 
         if (state.selected?.type === "route" && !getSelectedRoute()) {
@@ -319,6 +346,7 @@ async function saveConfiguration() {
     });
 
     state.configuration = await response.json();
+    captureSavedDraftSnapshots();
     render();
 }
 
@@ -440,7 +468,7 @@ function bindRouteEditor() {
                 .filter(Boolean);
             route.order = Number.parseInt(document.getElementById("route-order").value || "0", 10);
             state.selected.id = route.routeId;
-            renderListsOnly();
+            renderDraftState();
         });
     });
 }
@@ -474,7 +502,7 @@ function bindClusterEditor() {
             const thresholdValue = document.getElementById("health-threshold").value.trim();
             cluster.consecutiveFailuresThreshold = thresholdValue ? Number.parseInt(thresholdValue, 10) : null;
             state.selected.id = cluster.clusterId;
-            renderListsOnly();
+            renderDraftState();
         });
     });
 }
@@ -491,6 +519,7 @@ function render() {
 
 function renderHeaderState() {
     if (state.activeView === "empty") {
+        elements.headerSelection.classList.remove("unsaved");
         const summary = state.telemetry.summary;
         if (!state.configuration.settings?.telemetryEnabled) {
             elements.headerSelection.textContent = "Telemetry is disabled for this Helgrind instance.";
@@ -505,14 +534,20 @@ function renderHeaderState() {
     const route = getSelectedRoute();
     const cluster = getSelectedCluster();
     const settings = state.configuration.settings || {};
+    const selectedDirty = route ? isDraftDirty("route", route) : cluster ? isDraftDirty("cluster", cluster) : false;
+    const dirtyRouteCount = getDirtyDraftCount("route");
+    const dirtyClusterCount = getDirtyDraftCount("cluster");
 
     if (route) {
-        elements.headerSelection.textContent = `Route ${route.routeId || "untitled"} -> ${route.clusterId || "no cluster"} | ${route.hosts.join(", ") || "no hosts"}`;
+        elements.headerSelection.textContent = `Route ${route.routeId || "untitled"} -> ${route.clusterId || "no cluster"} | ${route.hosts.join(", ") || "no hosts"}${selectedDirty ? " | unsaved" : ""}`;
     } else if (cluster) {
-        elements.headerSelection.textContent = `Cluster ${cluster.clusterId || "untitled"} | ${cluster.destinations.length} destination(s) | health ${cluster.healthCheck.enabled ? "enabled" : "disabled"}`;
+        elements.headerSelection.textContent = `Cluster ${cluster.clusterId || "untitled"} | ${cluster.destinations.length} destination(s) | health ${cluster.healthCheck.enabled ? "enabled" : "disabled"}${selectedDirty ? " | unsaved" : ""}`;
     } else {
-        elements.headerSelection.textContent = `${settings.publicHttpsEndpointDisplay || "Public proxy"} | ${settings.adminHttpsEndpointDisplay || "Admin dashboard"}`;
+        const dirtySummary = buildDirtySummary(dirtyRouteCount, dirtyClusterCount);
+        elements.headerSelection.textContent = `${settings.publicHttpsEndpointDisplay || "Public proxy"} | ${settings.adminHttpsEndpointDisplay || "Admin dashboard"}${dirtySummary ? ` | ${dirtySummary}` : ""}`;
     }
+
+    elements.headerSelection.classList.toggle("unsaved", selectedDirty || dirtyRouteCount > 0 || dirtyClusterCount > 0);
 
     elements.dashboardStatus.classList.remove("live", "reconnecting", "error");
     if (settings.usingFallbackCertificate) {
@@ -534,22 +569,26 @@ function renderHeaderState() {
 function renderListsOnly() {
     const visibleRoutes = getFilteredRoutes();
     const visibleClusters = getFilteredClusters();
+    const dirtyRouteCount = getDirtyDraftCount("route");
+    const dirtyClusterCount = getDirtyDraftCount("cluster");
 
     renderList(elements.routeList, visibleRoutes, "route", route => ({
         title: route.routeId || "Untitled route",
         subtitle: `${route.hosts.join(", ") || "No hosts"}`,
         meta: `Cluster ${route.clusterId || "none"} | Path ${route.path || "{**catch-all}"}`,
         count: route.hosts.length,
+        dirty: isDraftDirty("route", route),
     }));
     renderList(elements.clusterList, visibleClusters, "cluster", cluster => ({
         title: cluster.clusterId || "Untitled cluster",
         subtitle: `${cluster.destinations.length} destination(s)`,
         meta: cluster.healthCheck.enabled ? `Health ${cluster.healthCheck.path || "/"}` : "Health disabled",
         count: cluster.destinations.length,
+        dirty: isDraftDirty("cluster", cluster),
     }));
 
-    elements.routeVisibleCount.textContent = `${visibleRoutes.length} / ${state.configuration.routes.length} shown`;
-    elements.clusterVisibleCount.textContent = `${visibleClusters.length} / ${state.configuration.clusters.length} shown`;
+    elements.routeVisibleCount.textContent = `${visibleRoutes.length} / ${state.configuration.routes.length} shown${dirtyRouteCount ? ` | ${dirtyRouteCount} unsaved` : ""}`;
+    elements.clusterVisibleCount.textContent = `${visibleClusters.length} / ${state.configuration.clusters.length} shown${dirtyClusterCount ? ` | ${dirtyClusterCount} unsaved` : ""}`;
 }
 
 function renderList(container, items, type, formatter) {
@@ -566,10 +605,13 @@ function renderList(container, items, type, formatter) {
         const id = type === "route" ? item.routeId : item.clusterId;
         const entry = formatter(item);
         const button = document.createElement("button");
-        button.className = `item-card ${state.selected?.type === type && state.selected?.id === id ? "selected" : ""}`;
+        button.className = `item-card ${state.selected?.type === type && state.selected?.id === id ? "selected" : ""} ${entry.dirty ? "unsaved" : ""}`;
         button.innerHTML = `
             <div class="item-main">
-                <strong>${escapeHtml(entry.title)}</strong>
+                <div class="item-title-row">
+                    <strong>${escapeHtml(entry.title)}</strong>
+                    ${entry.dirty ? '<span class="dirty-badge">Unsaved</span>' : ""}
+                </div>
                 <span>${escapeHtml(entry.subtitle)}</span>
                 <span class="item-meta">${escapeHtml(entry.meta || "")}</span>
             </div>
@@ -592,17 +634,18 @@ function renderEditor() {
     elements.clusterEditor.classList.toggle("hidden", !cluster);
 
     if (route) {
-        elements.editorTitle.textContent = `Route: ${route.routeId || "Untitled"}`;
+        elements.editorTitle.textContent = `Route: ${route.routeId || "Untitled"}${isDraftDirty("route", route) ? " · Unsaved" : ""}`;
         document.getElementById("route-id").value = route.routeId;
         document.getElementById("route-cluster-id").value = route.clusterId;
         document.getElementById("route-path").value = route.path;
         document.getElementById("route-hosts").value = route.hosts.join("\n");
         document.getElementById("route-order").value = route.order;
+        updateEditorDraftState();
         return;
     }
 
     if (cluster) {
-        elements.editorTitle.textContent = `Cluster: ${cluster.clusterId || "Untitled"}`;
+        elements.editorTitle.textContent = `Cluster: ${cluster.clusterId || "Untitled"}${isDraftDirty("cluster", cluster) ? " · Unsaved" : ""}`;
         document.getElementById("cluster-id").value = cluster.clusterId;
         document.getElementById("cluster-load-balancing").value = cluster.loadBalancingPolicy || "";
         document.getElementById("health-enabled").checked = !!cluster.healthCheck.enabled;
@@ -613,11 +656,13 @@ function renderEditor() {
         document.getElementById("health-query").value = cluster.healthCheck.query || "";
         document.getElementById("health-threshold").value = cluster.consecutiveFailuresThreshold ?? "";
         renderDestinationList(cluster);
+        updateEditorDraftState();
         return;
     }
 
     elements.editorTitle.textContent = "Select a route or cluster";
     elements.destinationList.innerHTML = "";
+    updateEditorDraftState();
 }
 
 function renderDestinationList(cluster) {
@@ -631,17 +676,18 @@ function renderDestinationList(cluster) {
 
         idInput.addEventListener("input", () => {
             destination.destinationId = idInput.value.trim();
-            renderListsOnly();
+            renderDraftState();
         });
 
         addressInput.addEventListener("input", () => {
             destination.address = addressInput.value.trim();
+            renderDraftState();
         });
 
         row.querySelector(".remove-destination").addEventListener("click", () => {
             cluster.destinations.splice(index, 1);
             renderDestinationList(cluster);
-            renderListsOnly();
+            renderDraftState();
         });
 
         elements.destinationList.appendChild(row);
@@ -910,6 +956,12 @@ function selectItem(type, id) {
     state.selected = { type, id };
 }
 
+function renderDraftState() {
+    renderHeaderState();
+    renderListsOnly();
+    updateEditorDraftState();
+}
+
 function setActiveView(view) {
     state.activeView = view;
     renderViewTabs();
@@ -921,6 +973,114 @@ function setActiveView(view) {
     }
 
     stopTelemetryAutoRefresh();
+}
+
+function ensureDraftKey(kind, item) {
+    const keyStore = draftKeyStore[kind];
+    if (keyStore.has(item)) {
+        return keyStore.get(item);
+    }
+
+    const key = `${kind}:${nextDraftKey++}`;
+    keyStore.set(item, key);
+    return key;
+}
+
+function captureSavedDraftSnapshots() {
+    savedDraftSnapshots.route.clear();
+    savedDraftSnapshots.cluster.clear();
+    deletedDraftKeys.route.clear();
+    deletedDraftKeys.cluster.clear();
+
+    state.configuration.routes.forEach(route => {
+        savedDraftSnapshots.route.set(ensureDraftKey("route", route), snapshotRoute(route));
+    });
+
+    state.configuration.clusters.forEach(cluster => {
+        savedDraftSnapshots.cluster.set(ensureDraftKey("cluster", cluster), snapshotCluster(cluster));
+    });
+}
+
+function isDraftDirty(kind, item) {
+    const key = ensureDraftKey(kind, item);
+    const savedSnapshot = savedDraftSnapshots[kind].get(key);
+    if (!savedSnapshot) {
+        return true;
+    }
+
+    return (kind === "route" ? snapshotRoute(item) : snapshotCluster(item)) !== savedSnapshot;
+}
+
+function getDirtyDraftCount(kind) {
+    const items = kind === "route" ? state.configuration.routes : state.configuration.clusters;
+    return items.filter(item => isDraftDirty(kind, item)).length + deletedDraftKeys[kind].size;
+}
+
+function markDraftDeleted(kind, item) {
+    const key = ensureDraftKey(kind, item);
+    if (savedDraftSnapshots[kind].has(key)) {
+        deletedDraftKeys[kind].add(key);
+    }
+}
+
+function snapshotRoute(route) {
+    return JSON.stringify({
+        routeId: route.routeId || "",
+        clusterId: route.clusterId || "",
+        path: route.path || "{**catch-all}",
+        hosts: [...(route.hosts || [])],
+        order: Number.isFinite(route.order) ? route.order : 0,
+    });
+}
+
+function snapshotCluster(cluster) {
+    return JSON.stringify({
+        clusterId: cluster.clusterId || "",
+        loadBalancingPolicy: cluster.loadBalancingPolicy || "",
+        healthCheck: {
+            enabled: !!cluster.healthCheck?.enabled,
+            interval: cluster.healthCheck?.interval || "",
+            timeout: cluster.healthCheck?.timeout || "",
+            policy: cluster.healthCheck?.policy || "",
+            path: cluster.healthCheck?.path || "",
+            query: cluster.healthCheck?.query || "",
+        },
+        consecutiveFailuresThreshold: cluster.consecutiveFailuresThreshold ?? null,
+        destinations: (cluster.destinations || []).map(destination => ({
+            destinationId: destination.destinationId || "",
+            address: destination.address || "",
+        })),
+    });
+}
+
+function updateEditorDraftState() {
+    const route = getSelectedRoute();
+    const cluster = getSelectedCluster();
+    const routeDirty = !!route && isDraftDirty("route", route);
+    const clusterDirty = !!cluster && isDraftDirty("cluster", cluster);
+    const routeSaveButton = document.getElementById("save-route");
+    const clusterSaveButton = document.getElementById("save-cluster");
+
+    elements.routeEditor.classList.toggle("editor-unsaved", routeDirty);
+    elements.clusterEditor.classList.toggle("editor-unsaved", clusterDirty);
+    routeSaveButton.classList.toggle("attention", routeDirty);
+    clusterSaveButton.classList.toggle("attention", clusterDirty);
+    routeSaveButton.textContent = routeDirty ? "Save Route Changes" : "Save Route";
+    clusterSaveButton.textContent = clusterDirty ? "Save Cluster Changes" : "Save Cluster";
+}
+
+function buildDirtySummary(dirtyRouteCount, dirtyClusterCount) {
+    const parts = [];
+
+    if (dirtyRouteCount) {
+        parts.push(`${dirtyRouteCount} unsaved route${dirtyRouteCount === 1 ? "" : "s"}`);
+    }
+
+    if (dirtyClusterCount) {
+        parts.push(`${dirtyClusterCount} unsaved cluster${dirtyClusterCount === 1 ? "" : "s"}`);
+    }
+
+    return parts.join(" | ");
 }
 
 function getSelectedRoute() {
