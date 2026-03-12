@@ -2,10 +2,7 @@ using Helgrind.Data;
 using Helgrind.Endpoints;
 using Helgrind.Options;
 using Helgrind.Services;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 
 var contentRootPath = ResolveContentRoot();
 var webRootPath = Path.Combine(contentRootPath, "wwwroot");
@@ -15,9 +12,10 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 	ContentRootPath = contentRootPath,
 	WebRootPath = Directory.Exists(webRootPath) ? webRootPath : null,
 });
-var certificateRuntimeState = new CertificateRuntimeState();
-LoadStartupCertificate(builder.Configuration, contentRootPath, certificateRuntimeState);
 var configuredOptions = builder.Configuration.GetSection(HelgrindOptions.SectionName).Get<HelgrindOptions>() ?? new HelgrindOptions();
+var databaseProvider = HelgrindDatabaseConfiguration.ResolveProvider(builder.Configuration);
+var certificateRuntimeState = new CertificateRuntimeState();
+HelgrindDatabaseConfiguration.TryLoadStartupCertificate(builder.Configuration, contentRootPath, configuredOptions, certificateRuntimeState);
 
 if (configuredOptions.PublicHttpsPort == configuredOptions.AdminHttpsPort)
 {
@@ -42,24 +40,14 @@ builder.Services.AddScoped<CertificateService>();
 builder.Services.AddScoped<ConfigurationService>();
 builder.Services.AddScoped<TelemetryQueryService>();
 builder.Services.AddScoped<TelemetryRetentionService>();
+var defaultConnectionString = HelgrindDatabaseConfiguration.ResolveConnectionString(
+	builder.Configuration,
+	contentRootPath,
+	configuredOptions,
+	databaseProvider);
 builder.Services.AddDbContext<HelgrindDbContext>((serviceProvider, options) =>
 {
-	var helgrindOptions = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<HelgrindOptions>>().Value;
-	
-	if (string.Equals(helgrindOptions.DatabaseProvider, "Postgres", StringComparison.OrdinalIgnoreCase))
-	{
-		if (string.IsNullOrWhiteSpace(helgrindOptions.PostgresConnectionString))
-		{
-			throw new InvalidOperationException("PostgresConnectionString must be configured when DatabaseProvider is Postgres.");
-		}
-		options.UseNpgsql(helgrindOptions.PostgresConnectionString);
-	}
-	else
-	{
-		var databasePath = Path.Combine(builder.Environment.ContentRootPath, helgrindOptions.DatabasePath);
-		Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
-		options.UseSqlite($"Data Source={databasePath}");
-	}
+	HelgrindDatabaseConfiguration.ConfigureDbContext(options, databaseProvider, defaultConnectionString);
 });
 builder.Services
 	.AddReverseProxy()
@@ -206,53 +194,4 @@ static string? FindContentRoot(string startPath)
 	}
 
 	return null;
-}
-
-static void LoadStartupCertificate(IConfiguration configuration, string contentRootPath, CertificateRuntimeState runtimeState)
-{
-	var databasePath = configuration.GetValue<string>("Helgrind:DatabasePath") ?? Path.Combine("App_Data", "helgrind.db");
-	var resolvedDatabasePath = Path.IsPathRooted(databasePath)
-		? databasePath
-		: Path.Combine(contentRootPath, databasePath);
-
-	if (!File.Exists(resolvedDatabasePath))
-	{
-		return;
-	}
-
-	using var connection = new SqliteConnection($"Data Source={resolvedDatabasePath}");
-	connection.Open();
-
-	using var command = connection.CreateCommand();
-	command.CommandText = """
-		SELECT PemFilePath, KeyFilePath
-		FROM Certificates
-		WHERE IsActive = 1
-		LIMIT 1
-		""";
-
-	try
-	{
-		using var reader = command.ExecuteReader();
-		if (!reader.Read())
-		{
-			return;
-		}
-
-		var pemFilePath = reader.GetString(0);
-		var keyFilePath = reader.GetString(1);
-		if (!File.Exists(pemFilePath) || !File.Exists(keyFilePath))
-		{
-			return;
-		}
-
-		using var certificate = X509Certificate2.CreateFromPemFile(pemFilePath, keyFilePath);
-		runtimeState.SetActiveCertificate(certificate);
-	}
-	catch (SqliteException)
-	{
-	}
-	catch (CryptographicException)
-	{
-	}
 }

@@ -24,11 +24,6 @@ public sealed class HelgrindOptions
         "fc00::/7",
         "fe80::/10"
     ];
-
-    public string DatabaseProvider { get; set; } = "Sqlite";
-
-    public string PostgresConnectionString { get; set; } = string.Empty;
-
     public string DatabasePath { get; set; } = Path.Combine("App_Data", "helgrind.db");
 
     public string CertificateStoragePath { get; set; } = Path.Combine("App_Data", "certificates");

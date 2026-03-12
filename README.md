@@ -47,11 +47,13 @@ Helgrind uses SQLite by default, saving your proxy configuration and telemetry t
 You can optionally configure Helgrind to use PostgreSQL instead. In the Linux deployment, edit `/etc/helgrind/helgrind.env` and append the following overrides:
 
 ```bash
-Helgrind__DatabaseProvider=Postgres
-Helgrind__PostgresConnectionString=Host=localhost;Database=helgrind;Username=postgres;Password=mypassword
+Database__Provider=PostgreSql
+ConnectionStrings__DefaultConnection=Host=localhost;Port=5432;Database=helgrind;Username=postgres;Password=mypassword
 ```
 
 Then restart the service: `sudo systemctl restart helgrind`.
+
+Helgrind still stores uploaded certificate files on disk, so `Helgrind__CertificateStoragePath` must remain persistent across redeployments even when the database backend is PostgreSQL.
 
 ### Quick Start (Dev)
 
