@@ -5,7 +5,7 @@
 ## 📦 Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Jeffe747/Helgrind/main/deploy/linux/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Jeffe747/Helgrind/main/deploy/linux/install.sh | sudo bash 
 ```
 
 Over SSH:
