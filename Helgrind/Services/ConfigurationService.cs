@@ -306,6 +306,17 @@ public sealed class ConfigurationService(
     {
         var normalized = Normalize(configuration);
 
+        if (normalized.Routes.Count == 0 && normalized.Clusters.Count == 0)
+        {
+            var hasExistingConfiguration = await dbContext.Routes.AnyAsync(cancellationToken)
+                || await dbContext.Clusters.AnyAsync(cancellationToken);
+
+            if (hasExistingConfiguration)
+            {
+                throw new InvalidOperationException("Refusing to replace a populated configuration with an empty draft.");
+            }
+        }
+
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         dbContext.Routes.RemoveRange(await dbContext.Routes.ToListAsync(cancellationToken));

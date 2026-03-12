@@ -345,6 +345,13 @@ async function saveConfiguration() {
         body: JSON.stringify(state.configuration),
     });
 
+    if (!response.ok) {
+        const text = await response.text();
+        let message = text;
+        try { message = JSON.parse(text)?.error || text; } catch { /* ignore */ }
+        throw new Error(message || "Could not save configuration.");
+    }
+
     state.configuration = await response.json();
     captureSavedDraftSnapshots();
     render();
@@ -605,6 +612,7 @@ function renderList(container, items, type, formatter) {
         const id = type === "route" ? item.routeId : item.clusterId;
         const entry = formatter(item);
         const button = document.createElement("button");
+        button.type = "button";
         button.className = `item-card ${state.selected?.type === type && state.selected?.id === id ? "selected" : ""} ${entry.dirty ? "unsaved" : ""}`;
         button.innerHTML = `
             <div class="item-main">

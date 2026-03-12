@@ -17,8 +17,15 @@ public static class ManagementEndpoints
 
         group.MapPut("/configuration", async (HelgrindConfigurationDto configuration, ConfigurationService configurationService, CancellationToken cancellationToken) =>
         {
-            await configurationService.SaveConfigurationAsync(configuration, cancellationToken);
-            return Results.Ok(await configurationService.GetConfigurationAsync(cancellationToken));
+            try
+            {
+                await configurationService.SaveConfigurationAsync(configuration, cancellationToken);
+                return Results.Ok(await configurationService.GetConfigurationAsync(cancellationToken));
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
         });
 
         group.MapPost("/apply", async (ConfigurationService configurationService, CancellationToken cancellationToken) =>
