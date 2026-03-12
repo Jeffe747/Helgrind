@@ -1,4 +1,4 @@
-const state = {
+﻿const state = {
     configuration: { routes: [], clusters: [], settings: {} },
     selected: null,
     ui: loadUiState(),
