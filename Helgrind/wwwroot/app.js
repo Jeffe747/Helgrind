@@ -260,7 +260,7 @@ async function loadConfiguration(selectionToRestore = null) {
             setStatus(`Could not load configuration: ${message}`);
             return;
         }
-        state.configuration = await response.json();
+        state.configuration = sanitizeConfigurationForSave(await response.json());
         captureSavedDraftSnapshots();
         state.selected = selectionToRestore;
 
@@ -369,7 +369,7 @@ async function saveConfiguration(allowEmpty = false) {
         throw new Error(message || "Could not save configuration.");
     }
 
-    state.configuration = await response.json();
+    state.configuration = sanitizeConfigurationForSave(await response.json());
     captureSavedDraftSnapshots();
     render();
 }
@@ -573,7 +573,10 @@ function renderHeaderState() {
     const dirtyClusterCount = getDirtyDraftCount("cluster");
 
     if (route) {
-        elements.headerSelection.textContent = `Route ${route.routeId || "untitled"} -> ${route.clusterId || "no cluster"} | ${route.hosts.join(", ") || "no hosts"}${selectedDirty ? " | unsaved" : ""}`;
+        const restrictionSummary = route.allowedClientNetworks?.length
+            ? ` | restricted to ${route.allowedClientNetworks.length} network${route.allowedClientNetworks.length === 1 ? "" : "s"}`
+            : "";
+        elements.headerSelection.textContent = `Route ${route.routeId || "untitled"} -> ${route.clusterId || "no cluster"} | ${route.hosts.join(", ") || "no hosts"}${restrictionSummary}${selectedDirty ? " | unsaved" : ""}`;
     } else if (cluster) {
         elements.headerSelection.textContent = `Cluster ${cluster.clusterId || "untitled"} | ${cluster.destinations.length} destination(s) | health ${cluster.healthCheck.enabled ? "enabled" : "disabled"}${selectedDirty ? " | unsaved" : ""}`;
     } else {
@@ -609,7 +612,7 @@ function renderListsOnly() {
     renderList(elements.routeList, visibleRoutes, "route", route => ({
         title: route.routeId || "Untitled route",
         subtitle: `${route.hosts.join(", ") || "No hosts"}`,
-        meta: `Cluster ${route.clusterId || "none"} | Path ${route.path || "{**catch-all}"}`,
+        meta: `Cluster ${route.clusterId || "none"} | Path ${route.path || "{**catch-all}"}${route.allowedClientNetworks?.length ? ` | Restricted ${route.allowedClientNetworks.length}` : ""}`,
         count: route.hosts.length,
         dirty: isDraftDirty("route", route),
     }));
