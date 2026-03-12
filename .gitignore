@@ -56,6 +56,6 @@ nunit-*.xml
 *.vsidx
 .vs/*
 
-
+*.db
 *.db-shm
 *.db-wal
