@@ -260,7 +260,8 @@ async function loadConfiguration(selectionToRestore = null) {
             setStatus(`Could not load configuration: ${message}`);
             return;
         }
-        state.configuration = sanitizeConfigurationForSave(await response.json());
+        const rawConfiguration = await response.json();
+        state.configuration = sanitizeConfigurationForSave(rawConfiguration);
         captureSavedDraftSnapshots();
         state.selected = selectionToRestore;
 
@@ -355,6 +356,10 @@ async function runTelemetrySmokeTest() {
 
 async function saveConfiguration(allowEmpty = false) {
     state.configuration = sanitizeConfigurationForSave(state.configuration);
+    const expectedRouteAllowlistById = new Map(
+        (state.configuration.routes || [])
+            .filter(route => (route.allowedClientNetworks || []).length > 0)
+            .map(route => [route.routeId, route.allowedClientNetworks.length]));
 
     const response = await fetch(`/api/admin/configuration${allowEmpty ? "?allowEmpty=true" : ""}`, {
         method: "PUT",
@@ -369,9 +374,26 @@ async function saveConfiguration(allowEmpty = false) {
         throw new Error(message || "Could not save configuration.");
     }
 
-    state.configuration = sanitizeConfigurationForSave(await response.json());
+    const rawConfiguration = await response.json();
+    state.configuration = sanitizeConfigurationForSave(rawConfiguration);
     captureSavedDraftSnapshots();
     render();
+
+    if (expectedRouteAllowlistById.size > 0 && backendDroppedRouteAllowlists(rawConfiguration, expectedRouteAllowlistById)) {
+        setStatus("The running Helgrind backend did not persist route allowlists. Restart or redeploy Helgrind so the new backend code and database schema are loaded.");
+    }
+}
+
+function backendDroppedRouteAllowlists(configuration, expectedRouteAllowlistById) {
+    const routes = Array.isArray(configuration?.routes) ? configuration.routes : [];
+    return Array.from(expectedRouteAllowlistById.entries()).some(([routeId, expectedCount]) => {
+        const route = routes.find(candidate => candidate?.routeId === routeId);
+        if (!route) {
+            return false;
+        }
+
+        return !Array.isArray(route.allowedClientNetworks) || route.allowedClientNetworks.length < expectedCount;
+    });
 }
 
 async function saveAndApplyConfiguration(statusPrefix, selectionToRestore = state.selected ? { ...state.selected } : null, allowEmpty = false) {
